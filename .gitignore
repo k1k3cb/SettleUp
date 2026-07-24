@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+.turbo/
+.cache/
+.env
+.env.local
+.env.*.local
+*.log
+
+# Vite
+apps/web/dist/
+
+# API
+apps/api/dist/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

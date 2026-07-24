@@ -1,0 +1,24 @@
+{
+  "name": "settleup",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fullstack web app for shared expenses, balances, and settlement suggestions.",
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "dev": "pnpm --parallel --filter @settleup/web --filter @settleup/api dev",
+    "dev:web": "pnpm --filter @settleup/web dev",
+    "dev:api": "pnpm --filter @settleup/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "eslint": "^10.8.0",
+    "typescript": "^7.0.2"
+  }
+}
