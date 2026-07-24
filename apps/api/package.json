@@ -13,11 +13,17 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "colors": "^1.4.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.23.1"
   }
 }
