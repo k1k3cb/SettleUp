@@ -1,13 +1,13 @@
 /**
  * SettleUp — Schema de base de datos (Drizzle ORM + PostgreSQL)
  *
- * Diseño pensado para:
- * 1. Integridad financiera: nunca perder o duplicar un céntimo (usamos enteros
- *    en centavos, NUNCA float, para evitar errores de redondeo).
- * 2. Auditoría: cada gasto queda inmutable una vez creado (si se "borra",
- *    se marca como cancelado, no se elimina la fila).
- * 3. Simplicidad de consulta: los "splits" (repartos) están normalizados en
- *    su propia tabla para poder calcular saldos con una sola query agregada.
+ * Convenciones:
+ * - Integridad financiera: importes SIEMPRE en centavos como integer (nunca float).
+ * - Auditoría: gastos son inmutables; "borrar" = marcar isCancelled.
+ * - Splits normalizados para calcular balances con una sola query agregada.
+ *
+ * Auth: las tablas user/session/account/verification siguen la convención
+ * de Better Auth (nombres en singular, snake_case en SQL, camelCase en TS).
  */
 
 import {
@@ -36,15 +36,67 @@ export const settlementStatusEnum = pgEnum("settlement_status", [
   "confirmed",
 ]);
 
-// ---------- USERS ----------
+// ---------- USERS (Better Auth: tabla "user") ----------
+// NOTA: Las 4 tablas de Better Auth (user, session, account, verification)
+// usan `text` para `id` en vez de `uuid` porque el adapter Drizzle de
+// Better Auth genera IDs en JS (strings de 32 chars) y los pasa al INSERT.
+// En uuid de Postgres, el cast falla. Usar text es lo que recomienda la doc
+// de Better Auth para Postgres cuando no se quiere custom ID generation.
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  avatarUrl: text("avatar_url"),
+  image: text("image"),
+  emailVerified: boolean("email_verified").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ---------- SESSIONS (Better Auth) ----------
+
+export const session = pgTable("session", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ---------- ACCOUNTS (Better Auth) ----------
+
+export const account = pgTable("account", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  password: text("password"),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at"),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+  scope: text("scope"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ---------- VERIFICATIONS (Better Auth) ----------
+
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // ---------- GROUPS ----------
@@ -52,8 +104,8 @@ export const users = pgTable("users", {
 export const groups = pgTable("groups", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  createdBy: uuid("created_by")
-    .references(() => users.id)
+  createdBy: text("created_by")
+    .references(() => user.id)
     .notNull(),
   inviteCode: text("invite_code").notNull().unique(), // para el link de invitación
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -67,18 +119,16 @@ export const groupMembers = pgTable(
     groupId: uuid("group_id")
       .references(() => groups.id, { onDelete: "cascade" })
       .notNull(),
-    userId: uuid("user_id")
-      .references(() => users.id)
+    userId: text("user_id")
+      .references(() => user.id)
       .notNull(),
     joinedAt: timestamp("joined_at").defaultNow().notNull(),
   },
   (table) => ({
-    // Un usuario no puede estar dos veces en el mismo grupo
     uniqueMembership: uniqueIndex("unique_group_user").on(
       table.groupId,
       table.userId
     ),
-    // Acelera "dame todos los grupos de este usuario"
     userGroupsIdx: index("idx_group_members_user").on(table.userId),
   })
 );
@@ -93,24 +143,20 @@ export const expenses = pgTable(
       .references(() => groups.id, { onDelete: "cascade" })
       .notNull(),
     description: text("description").notNull(),
-    // SIEMPRE en centavos (integer), nunca float, para evitar errores de
-    // redondeo con dinero. 15.50€ se guarda como 1550.
     amountCents: integer("amount_cents").notNull(),
     currency: text("currency").default("EUR").notNull(),
-    paidBy: uuid("paid_by")
-      .references(() => users.id)
+    paidBy: text("paid_by")
+      .references(() => user.id)
       .notNull(),
     splitMethod: splitMethodEnum("split_method").notNull(),
     isCancelled: boolean("is_cancelled").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
-    // Para listar los gastos de un grupo ordenados por fecha
     groupCreatedIdx: index("idx_expenses_group_created").on(
       table.groupId,
       table.createdAt
     ),
-    // Para el cálculo de balances: "lo que pagó cada uno en este grupo"
     groupPayerIdx: index("idx_expenses_group_payer").on(
       table.groupId,
       table.paidBy
@@ -126,15 +172,12 @@ export const expenseSplits = pgTable(
     expenseId: uuid("expense_id")
       .references(() => expenses.id, { onDelete: "cascade" })
       .notNull(),
-    userId: uuid("user_id")
-      .references(() => users.id)
+    userId: text("user_id")
+      .references(() => user.id)
       .notNull(),
-    // Cuánto debe esta persona de este gasto concreto, en centavos.
-    // La suma de todos los owedAmountCents de un expense debe == amountCents.
     owedAmountCents: integer("owed_amount_cents").notNull(),
   },
   (table) => ({
-    // Acelera el cálculo de balances: "cuánto debe este usuario en este grupo"
     userExpenseIdx: index("idx_splits_user_expense").on(
       table.userId,
       table.expenseId
@@ -143,9 +186,6 @@ export const expenseSplits = pgTable(
 );
 
 // ---------- SETTLEMENTS (pagos para saldar deuda) ----------
-// Cuando alguien "paga" lo que debe, se registra aquí. Esto es lo que
-// consume tu algoritmo de simplificación: sugiere settlements óptimos,
-// el usuario los confirma, y aquí quedan registrados.
 
 export const settlements = pgTable(
   "settlements",
@@ -154,19 +194,18 @@ export const settlements = pgTable(
     groupId: uuid("group_id")
       .references(() => groups.id, { onDelete: "cascade" })
       .notNull(),
-    fromUser: uuid("from_user")
-      .references(() => users.id)
-      .notNull(), // quien paga
-    toUser: uuid("to_user")
-      .references(() => users.id)
-      .notNull(), // quien recibe
+    fromUser: text("from_user")
+      .references(() => user.id)
+      .notNull(),
+    toUser: text("to_user")
+      .references(() => user.id)
+      .notNull(),
     amountCents: integer("amount_cents").notNull(),
     status: settlementStatusEnum("status").default("pending").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     confirmedAt: timestamp("confirmed_at"),
   },
   (table) => ({
-    // Para el cálculo de balances por grupo
     groupStatusIdx: index("idx_settlements_group_status").on(
       table.groupId,
       table.status
@@ -174,11 +213,27 @@ export const settlements = pgTable(
   })
 );
 
-// ---------- RELATIONS (para queries tipadas con Drizzle) ----------
+// ---------- RELATIONS ----------
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const userRelations = relations(user, ({ many }) => ({
   groupMemberships: many(groupMembers),
   expensesPaid: many(expenses),
+  sessions: many(session),
+  accounts: many(account),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id],
+  }),
 }));
 
 export const groupsRelations = relations(groups, ({ many }) => ({
@@ -192,9 +247,9 @@ export const expensesRelations = relations(expenses, ({ one, many }) => ({
     fields: [expenses.groupId],
     references: [groups.id],
   }),
-  payer: one(users, {
+  payer: one(user, {
     fields: [expenses.paidBy],
-    references: [users.id],
+    references: [user.id],
   }),
   splits: many(expenseSplits),
 }));
@@ -204,26 +259,19 @@ export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
     fields: [expenseSplits.expenseId],
     references: [expenses.id],
   }),
-  user: one(users, {
+  user: one(user, {
     fields: [expenseSplits.userId],
-    references: [users.id],
+    references: [user.id],
   }),
 }));
 
 /**
- * NOTA SOBRE EL CÁLCULO DE SALDOS (el corazón del proyecto):
- *
- * El saldo neto de cada usuario en un grupo se calcula así (pseudocódigo SQL):
+ * Cálculo de saldos (single query agregada):
  *
  *   balance[user] = SUM(expenses.amountCents WHERE paidBy = user)
  *                  - SUM(expenseSplits.owedAmountCents WHERE userId = user)
  *                  + SUM(settlements.amountCents WHERE toUser = user, confirmed)
  *                  - SUM(settlements.amountCents WHERE fromUser = user, confirmed)
  *
- * Con esos balances netos por usuario, el algoritmo de simplificación de
- * deudas (greedy: emparejar el mayor deudor con el mayor acreedor
- * repetidamente) genera la lista mínima de transferencias sugeridas.
- * Esa lógica vive en el backend, en un servicio separado (ej. debtSimplifier.ts),
- * NO en el schema — pero el schema está diseñado para que esa query
- * de balances sea una sola consulta agregada eficiente.
+ * Lógica de simplificación en apps/api/src/modules/balances/debtSimplifier.ts.
  */

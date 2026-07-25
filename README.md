@@ -30,3 +30,11 @@ docs              Architecture, API, and database notes
 2. Create a Neon Postgres database and copy its pooled `DATABASE_URL`.
 3. Implement Drizzle schema and migrations in `apps/api/src/db`.
 4. Build the main flows: groups, expenses, balances, settlements, and realtime updates.
+
+
+
+{
+  "email": "tu@email.com",
+  "password": "password123",
+  "name": "Tu Nombre"
+}
