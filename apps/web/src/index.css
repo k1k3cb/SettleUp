@@ -2,129 +2,157 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+  --font-sans: 'Geist Variable', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Code', monospace;
+  --font-heading: var(--font-sans);
+
+  /* SettleUp palette — la libreta de cuentas */
+  --color-paper: #F4EFE6;
+  --color-ink: #1A1814;
+  --color-card: #FBF8F1;
+  --color-accent: #E94B2C;
+
+  /* shadcn shims — derivan de los tokens reales */
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-card);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-ink);
+  --color-primary-foreground: var(--color-card);
+  --color-secondary: oklch(0.94 0.01 70);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: oklch(0.93 0.01 70);
+  --color-muted-foreground: oklch(0.45 0.01 70);
+  --color-accent-foreground: var(--color-card);
+  --color-destructive: var(--color-accent);
+  --color-border: oklch(0.85 0.01 70);
+  --color-input: oklch(0.85 0.01 70);
+  --color-ring: oklch(0.55 0.01 70);
+
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+
+  /* Animaciones de la firma visual */
+  --animate-print: print 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-stamp: stamp 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-stamp-hover: stamp-hover 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-:root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+@keyframes print {
+  from {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
 }
 
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+@keyframes stamp {
+  from {
+    transform: scale(1.6) rotate(-8deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@keyframes stamp-hover {
+  from {
+    transform: scale(1) rotate(0);
+  }
+  to {
+    transform: scale(1.04) rotate(-1.5deg);
+  }
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-    }
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-ink);
+  }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* textura de papel: ruido sutil en el fondo */
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(26, 24, 20, 0.03), transparent),
+      radial-gradient(ellipse 60% 50% at 100% 100%, rgba(26, 24, 20, 0.025), transparent);
+  }
+
+  ::selection {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+  }
+}
+
+@layer components {
+  /* La firma: tira de papel perforado.
+     border-image genera los círculos de perforado arriba y abajo. */
+  .receipt {
+    --hole-size: 6px;
+    --hole-gap: 8px;
+    --line-color: color-mix(in oklab, var(--color-ink) 35%, transparent);
+    background-color: var(--color-card);
+    box-shadow:
+      0 1px 0 var(--line-color),
+      0 14px 28px -16px color-mix(in oklab, var(--color-ink) 30%, transparent),
+      0 4px 8px -4px color-mix(in oklab, var(--color-ink) 18%, transparent);
+    border-top: 1px dashed var(--line-color);
+    border-bottom: 1px dashed var(--line-color);
+    border-radius: 2px;
+  }
+
+  /* Animaciones aplicadas a la firma */
+  .animate-print {
+    animation: var(--animate-print);
+  }
+
+  .stamp {
+    animation: var(--animate-stamp);
+  }
+
+  .group:hover .stamp {
+    animation: var(--animate-stamp-hover);
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-print,
+    .stamp,
+    .group:hover .stamp {
+      animation: none !important;
     }
-  html {
-    @apply font-sans;
-    }
+  }
+
+  /* Inputs con el subrayado de tinta, no el rectángulo estándar */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"] {
+    color: var(--color-ink);
+  }
+
+  input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-card) inset;
+    -webkit-text-fill-color: var(--color-ink);
+  }
 }
