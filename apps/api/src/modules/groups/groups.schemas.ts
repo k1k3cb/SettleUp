@@ -26,7 +26,10 @@ export const joinGroupSchema = z.object({
     .string()
     .min(6, "Invite code is required")
     .max(32, "Invalid invite code")
-    .trim(),
+    .trim()
+    // Los códigos se generan en hex minúsculas. Normalizamos para que
+    // pegar el código en mayúsculas (típico al copiar/pegar) funcione.
+    .toLowerCase(),
 });
 
 export const groupIdParamSchema = z.object({

@@ -112,7 +112,9 @@ export function GroupsPage() {
   const onJoin = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    const code = invite.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    // El backend normaliza a minúsculas, pero mandamos minúsculas ya
+    // normalizadas para evitar depender solo de esa normalización.
+    const code = invite.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
     if (code.length < 6) {
       setErrors({ inviteCode: "El código tiene al menos 6 caracteres." });
       return;

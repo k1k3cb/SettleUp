@@ -38,3 +38,7 @@ docs              Architecture, API, and database notes
   "password": "password123",
   "name": "Tu Nombre"
 }
+
+{
+  password123 y emails user2@test.com / user3@test.com.
+}
