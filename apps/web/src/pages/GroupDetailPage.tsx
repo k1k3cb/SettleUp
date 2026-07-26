@@ -133,21 +133,33 @@ function Header({
 }) {
   return (
     <header className="flex items-baseline justify-between">
-      <Link
-        to="/groups"
-        onClick={(e) => {
-          e.preventDefault();
-          onBack();
-        }}
-        className="group inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55 hover:text-ink transition-colors"
+      <nav
+        aria-label="Migas"
+        className="flex items-baseline gap-2 font-mono text-[10px] tracking-[0.18em] uppercase"
       >
-        <ArrowLeft
-          className="size-3 transition-transform group-hover:-translate-x-0.5"
-          strokeWidth={2.25}
-          aria-hidden
-        />
-        Cuentas
-      </Link>
+        <Link
+          to="/"
+          className="text-ink/70 hover:text-ink transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40 rounded-sm"
+        >
+          SettleUp
+        </Link>
+        <span aria-hidden className="text-ink/30">/</span>
+        <Link
+          to="/groups"
+          onClick={(e) => {
+            e.preventDefault();
+            onBack();
+          }}
+          className="group inline-flex items-center gap-1.5 text-ink/55 hover:text-ink transition-colors"
+        >
+          <ArrowLeft
+            className="size-3 transition-transform group-hover:-translate-x-0.5"
+            strokeWidth={2.25}
+            aria-hidden
+          />
+          Cuentas
+        </Link>
+      </nav>
       <button
         type="button"
         onClick={onSignOut}

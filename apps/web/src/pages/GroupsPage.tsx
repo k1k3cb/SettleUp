@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Check, Copy } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth";
 import { groupsService } from "@/services/groups";
@@ -240,9 +240,17 @@ function PageHeader({
 }) {
   return (
     <header className="flex items-baseline justify-between">
-      <div className="font-mono text-xs tracking-[0.22em] uppercase text-ink/70">
-        SettleUp · Cuentas
-      </div>
+      <Link
+        to="/"
+        className="group inline-flex items-baseline gap-1.5 font-mono text-xs tracking-[0.22em] uppercase text-ink/70 hover:text-ink transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40 rounded-sm"
+        aria-label="Volver al inicio"
+      >
+        SettleUp
+        <span aria-hidden className="text-ink/35">·</span>
+        <span className="text-ink/55 group-hover:text-ink transition-colors">
+          Cuentas
+        </span>
+      </Link>
       <button
         type="button"
         onClick={onSignOut}
