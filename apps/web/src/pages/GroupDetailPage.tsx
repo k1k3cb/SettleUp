@@ -1,10 +1,22 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Copy } from "lucide-react";
+import { ArrowLeft, Check, Copy, Plus, Wallet } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth";
 import { groupsService, type GroupDetail } from "@/services/groups";
-import type { Member } from "@/types/group";
+import { useGroupMembers } from "@/hooks/useGroupMembers";
+import { useGroupExpenses } from "@/hooks/useGroupExpenses";
+import type { GroupMember } from "@/services/members";
 import { ApiError } from "@/lib/api";
+import { ExpenseForm } from "@/components/expenses/ExpenseForm";
+
+const formatCents = (cents: number, currency: string): string => {
+  const sign = cents < 0 ? "−" : "";
+  const abs = Math.abs(cents);
+  const major = Math.floor(abs / 100);
+  const minor = (abs % 100).toString().padStart(2, "0");
+  const symbol = currency === "EUR" ? "€" : currency;
+  return `${sign}${major},${minor} ${symbol}`;
+};
 
 const formatInviteCode = (raw: string) => {
   const clean = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -28,10 +40,12 @@ export function GroupDetailPage() {
   const navigate = useNavigate();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
-  const [members, setMembers] = useState<Member[] | null>(null);
-  const [membersError, setMembersError] = useState<string | null>(null);
-  const [error, setError] = useState<{ kind: "load" | "notfound" | "forbidden"; message: string } | null>(null);
+  const [error, setError] = useState<{
+    kind: "load" | "notfound" | "forbidden";
+    message: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [expenseFormOpen, setExpenseFormOpen] = useState(false);
 
   useEffect(() => {
     if (isPending) return;
@@ -40,7 +54,10 @@ export function GroupDetailPage() {
       return;
     }
     if (!id) {
-      setError({ kind: "notfound", message: "Falta el identificador del grupo." });
+      setError({
+        kind: "notfound",
+        message: "Falta el identificador del grupo.",
+      });
       return;
     }
     void load(id);
@@ -49,14 +66,9 @@ export function GroupDetailPage() {
   const load = async (groupId: string) => {
     setError(null);
     setGroup(null);
-    setMembers(null);
-    setMembersError(null);
     try {
       const data = await groupsService.get(groupId);
       setGroup(data);
-      // Los miembros se cargan en paralelo. Si fallan, no bloqueamos
-      // la página: la sección se muestra vacía o con un aviso suave.
-      void loadMembers(groupId);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 404) {
@@ -74,19 +86,6 @@ export function GroupDetailPage() {
           kind: "load",
           message: "No hemos podido abrir la cuenta.",
         });
-      }
-    }
-  };
-
-  const loadMembers = async (groupId: string) => {
-    try {
-      const list = await groupsService.listMembers(groupId);
-      setMembers(list);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setMembersError(err.message);
-      } else {
-        setMembersError("No hemos podido listar los miembros.");
       }
     }
   };
@@ -134,11 +133,11 @@ export function GroupDetailPage() {
           <Notebook
             group={group}
             currentUserId={session.user.id}
-            currentUserName={session.user.name}
-            members={members}
-            membersError={membersError}
             copied={copied}
             onCopy={onCopy}
+            expenseFormOpen={expenseFormOpen}
+            onOpenExpenseForm={() => setExpenseFormOpen(true)}
+            onCloseExpenseForm={() => setExpenseFormOpen(false)}
           />
         ) : (
           <Skeleton />
@@ -198,27 +197,28 @@ function Header({
 function Notebook({
   group,
   currentUserId,
-  currentUserName,
-  members,
-  membersError,
   copied,
   onCopy,
+  expenseFormOpen,
+  onOpenExpenseForm,
+  onCloseExpenseForm,
 }: {
   group: GroupDetail;
   currentUserId: string;
-  currentUserName: string;
-  members: Member[] | null;
-  membersError: string | null;
   copied: boolean;
   onCopy: () => void;
+  expenseFormOpen: boolean;
+  onOpenExpenseForm: () => void;
+  onCloseExpenseForm: () => void;
 }) {
   const isOwner = group.createdBy === currentUserId;
+  const membersQuery = useGroupMembers(group.id);
+  const members = membersQuery.data ?? null;
 
   return (
     <main className="mt-10 sm:mt-12 space-y-6">
       <article className="receipt relative animate-print">
         <div className="bg-card border-x border-ink/12">
-          {/* Membrete: nombre del grupo a la izquierda, sello "invita" a la derecha */}
           <div className="flex items-start justify-between gap-4 border-b border-ink/10 px-7 pt-7 pb-6 sm:px-9">
             <div className="min-w-0">
               <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/55">
@@ -234,7 +234,6 @@ function Notebook({
             <InviteStamp copied={copied} onClick={onCopy} />
           </div>
 
-          {/* Bloque de invitación: la acción real que la API soporta hoy */}
           <div className="px-7 pt-6 pb-2 sm:px-9">
             <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
               Invitación
@@ -281,12 +280,23 @@ function Notebook({
       <Signers
         group={group}
         currentUserId={currentUserId}
-        currentUserName={currentUserName}
         members={members}
-        membersError={membersError}
+        membersLoading={membersQuery.isLoading}
+        membersError={membersQuery.error ? (membersQuery.error as Error).message : null}
       />
 
-      <Sections />
+      <Expenses
+        groupId={group.id}
+        currentUserId={currentUserId}
+        members={members}
+        membersLoading={membersQuery.isLoading}
+        membersError={membersQuery.error ? (membersQuery.error as Error).message : null}
+        formOpen={expenseFormOpen}
+        onOpenForm={onOpenExpenseForm}
+        onCloseForm={onCloseExpenseForm}
+      />
+
+      <BalancesPending />
     </main>
   );
 }
@@ -294,14 +304,14 @@ function Notebook({
 function Signers({
   group,
   currentUserId,
-  currentUserName,
   members,
+  membersLoading,
   membersError,
 }: {
   group: GroupDetail;
   currentUserId: string;
-  currentUserName: string;
-  members: Member[] | null;
+  members: GroupMember[] | null;
+  membersLoading: boolean;
   membersError: string | null;
 }) {
   return (
@@ -326,7 +336,7 @@ function Signers({
                 <span className="text-ink/40">— puedes seguir mirando la cuenta.</span>
               </p>
             </div>
-          ) : members === null ? (
+          ) : membersLoading || members === null ? (
             <SignersSkeleton count={2} />
           ) : members.length === 0 ? (
             <div className="px-7 py-6 sm:px-9">
@@ -337,7 +347,8 @@ function Signers({
               {members.map((m) => (
                 <SignerRow
                   key={m.userId}
-                  member={m}
+                  name={m.name}
+                  joinedAt={m.joinedAt}
                   isCurrent={m.userId === currentUserId}
                   isOwner={m.userId === group.createdBy}
                 />
@@ -356,11 +367,13 @@ function Signers({
 }
 
 function SignerRow({
-  member,
+  name,
+  joinedAt,
   isCurrent,
   isOwner,
 }: {
-  member: Member;
+  name: string;
+  joinedAt: string;
   isCurrent: boolean;
   isOwner: boolean;
 }) {
@@ -374,10 +387,10 @@ function SignerRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-base font-semibold tracking-[-0.01em] text-ink truncate">
-          {member.name}
+          {name}
         </p>
         <p className="mt-1 font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
-          desde el {formatCreatedAt(member.joinedAt)}
+          desde el {formatCreatedAt(joinedAt)}
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -398,10 +411,7 @@ function YouChip() {
 
 function OwnerStamp({ isYou }: { isYou: boolean }) {
   return (
-    <span
-      aria-hidden
-      className="stamp relative select-none"
-    >
+    <span aria-hidden className="stamp relative select-none">
       <span className="inline-block border-[1.5px] border-accent rounded-[3px] px-2.5 py-1 rotate-[-6deg]">
         <span className="block font-mono text-[10px] tracking-[0.26em] uppercase text-accent leading-none">
           {isYou ? "Tú · abriste" : "Abierto por"}
@@ -431,6 +441,217 @@ function SignersSkeleton({ count }: { count: number }) {
   );
 }
 
+function Expenses({
+  groupId,
+  currentUserId,
+  members,
+  membersLoading,
+  membersError,
+  formOpen,
+  onOpenForm,
+  onCloseForm,
+}: {
+  groupId: string;
+  currentUserId: string;
+  members: GroupMember[] | null;
+  membersLoading: boolean;
+  membersError: string | null;
+  formOpen: boolean;
+  onOpenForm: () => void;
+  onCloseForm: () => void;
+}) {
+  const canOpenForm = !!members && members.length > 0 && !membersError;
+  const expensesQuery = useGroupExpenses(groupId);
+  const expenses = expensesQuery.data ?? null;
+  const count = expenses?.length ?? 0;
+  const countLabel = `${count.toString().padStart(2, "0")}`;
+
+  return (
+    <section aria-label="Gastos de la cuenta" className="space-y-3">
+      <div className="flex items-baseline justify-between px-1">
+        <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
+          Apuntes
+        </p>
+        <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/40">
+          {expensesQuery.isLoading ? "…" : countLabel}
+        </p>
+      </div>
+
+      <article className="receipt relative">
+        <div className="bg-card border-x border-ink/12">
+          <div className="flex items-center justify-between border-b border-ink/10 px-7 py-3 sm:px-9">
+            <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-ink/55">
+              {expensesQuery.isLoading
+                ? "Cargando…"
+                : count === 0
+                  ? "Aún sin apuntes"
+                  : "Últimos apuntes"}
+            </span>
+            <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-ink/55">
+              —
+            </span>
+          </div>
+
+          {expensesQuery.isError ? (
+            <div className="px-7 py-6 sm:px-9">
+              <p className="font-mono text-xs text-accent border-l-2 border-accent pl-3 py-1">
+                {(expensesQuery.error as Error).message}
+              </p>
+            </div>
+          ) : expenses && expenses.length > 0 ? (
+            <ul className="divide-y divide-ink/10">
+              {expenses.map((e, i) => (
+                <ExpenseRow
+                  key={e.id}
+                  index={i}
+                  description={e.description}
+                  amountCents={e.amountCents}
+                  currency={e.currency}
+                  paidByName={
+                    members?.find((m) => m.userId === e.paidBy)?.name ?? "—"
+                  }
+                />
+              ))}
+            </ul>
+          ) : !expensesQuery.isLoading ? (
+            <div className="px-7 py-7 sm:px-9 space-y-5">
+              <p className="text-sm text-ink/65 max-w-xs">
+                Anota el primer gasto de la cuenta. La lista se irá
+                rellenando conforme se sumen más.
+              </p>
+            </div>
+          ) : (
+            <ul aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="px-7 py-4 sm:px-9 border-b border-ink/10 last:border-b-0">
+                  <div className="h-3.5 w-1/2 bg-ink/10" />
+                  <div className="mt-2 h-2.5 w-1/3 bg-ink/5" />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {membersError ? (
+            <div className="px-7 pt-2 pb-7 sm:px-9">
+              <p className="font-mono text-[11px] text-accent border-l-2 border-accent pl-3 py-1">
+                {membersError}
+              </p>
+            </div>
+          ) : membersLoading ? (
+            <div className="px-7 pt-2 pb-7 sm:px-9">
+              <div className="h-9 w-48 bg-ink/5" aria-hidden />
+            </div>
+          ) : (
+            <div className="px-7 pt-2 pb-7 sm:px-9">
+              <button
+                type="button"
+                onClick={onOpenForm}
+                disabled={!canOpenForm}
+                className="group/btn relative disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-0 bg-accent rounded-sm stamp origin-center"
+                />
+                <span className="relative inline-flex items-center gap-1.5 px-5 py-2.5 text-card font-semibold tracking-wide">
+                  <Plus className="size-4" strokeWidth={2.5} aria-hidden />
+                  {count === 0 ? "Anotar gasto" : "Anotar otro"}
+                </span>
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between border-t border-dashed border-ink/20 px-7 py-3 sm:px-9 text-xs text-ink/55">
+            <span>
+              {count === 0
+                ? "El primer apunte es el más difícil."
+                : "Cada apunte, una línea del cuaderno."}
+            </span>
+            <span className="font-mono tracking-wider">#gastos</span>
+          </div>
+        </div>
+      </article>
+
+      {formOpen && members && (
+        <ExpenseForm
+          groupId={groupId}
+          members={members}
+          defaultPayerId={currentUserId || members[0]?.userId || ""}
+          onClose={onCloseForm}
+        />
+      )}
+    </section>
+  );
+}
+
+function ExpenseRow({
+  index,
+  description,
+  amountCents,
+  currency,
+  paidByName,
+}: {
+  index: number;
+  description: string;
+  amountCents: number;
+  currency: string;
+  paidByName: string;
+}) {
+  return (
+    <li className="px-7 py-4 sm:px-9 flex items-center gap-4">
+      <span className="font-mono text-[11px] tracking-[0.12em] text-ink/45 w-8 shrink-0">
+        ,{(index + 1).toString().padStart(2, "0")}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-semibold tracking-[-0.01em] text-ink">
+          {description}
+        </p>
+        <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
+          Pagó {paidByName}
+        </p>
+      </div>
+      <span className="font-mono text-sm tabular-nums text-ink/85">
+        {formatCents(amountCents, currency)}
+      </span>
+    </li>
+  );
+}
+
+function BalancesPending() {
+  return (
+    <section aria-label="Saldos" className="space-y-3">
+      <div className="flex items-baseline justify-between px-1">
+        <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
+          Saldos
+        </p>
+      </div>
+      <article className="receipt">
+        <div className="bg-card border-x border-ink/12">
+          <div className="flex items-center justify-between border-b border-ink/10 px-7 py-3 sm:px-9">
+            <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-ink/55">
+              Pendiente
+            </span>
+            <Wallet
+              className="size-3.5 text-ink/40"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </div>
+          <div className="px-7 py-6 sm:px-9">
+            <p className="text-sm text-ink/55">
+              Los saldos se calculan cuando haya gastos apuntados.
+            </p>
+          </div>
+          <div className="flex items-center justify-between border-t border-dashed border-ink/20 px-7 py-3 sm:px-9 text-xs text-ink/55">
+            <span>Llegará con los apuntes.</span>
+            <span className="font-mono tracking-wider">#saldos</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 function InviteStamp({
   copied,
   onClick,
@@ -451,60 +672,6 @@ function InviteStamp({
         </span>
       </div>
     </button>
-  );
-}
-
-function Sections() {
-  return (
-    <section aria-label="Secciones de la cuenta" className="space-y-3">
-      <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45 px-1">
-        Apartados
-      </p>
-
-      <ul className="border-y border-dashed border-ink/20 divide-y divide-ink/10 bg-card border-x border-ink/12">
-        <DisabledRow serial=",01" label="Gastos" hint="Pendiente — sin endpoint." />
-        <DisabledRow serial=",02" label="Saldos" hint="Pendiente — sin endpoint." />
-      </ul>
-
-      <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink/40 px-1 pt-1">
-        Llegarán cuando el backend los exponga.
-      </p>
-    </section>
-  );
-}
-
-function DisabledRow({
-  serial,
-  label,
-  hint,
-}: {
-  serial: string;
-  label: string;
-  hint: string;
-}) {
-  return (
-    <li
-      aria-disabled
-      className="flex items-center gap-4 px-5 py-4 sm:px-7 cursor-not-allowed"
-    >
-      <span className="font-mono text-[11px] tracking-[0.12em] text-ink/35 w-8 shrink-0">
-        {serial}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-base font-semibold tracking-[-0.01em] text-ink/45">
-          {label}
-        </p>
-        <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/35">
-          {hint}
-        </p>
-      </div>
-      <span
-        aria-hidden
-        className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/35"
-      >
-        —
-      </span>
-    </li>
   );
 }
 
