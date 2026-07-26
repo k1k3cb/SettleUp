@@ -36,6 +36,14 @@ export const groupIdParamSchema = z.object({
   id: z.string().uuid("Invalid group id"),
 });
 
+/**
+ * Para routers anidados bajo /groups/:groupId/...
+ * (expenses, members). El param se llama `groupId` en lugar de `id`.
+ */
+export const groupIdOnlyParamSchema = z.object({
+  groupId: z.string().uuid("Invalid group id"),
+});
+
 export type CreateGroupInput = z.infer<typeof createGroupSchema>;
 export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
 export type JoinGroupInput = z.infer<typeof joinGroupSchema>;

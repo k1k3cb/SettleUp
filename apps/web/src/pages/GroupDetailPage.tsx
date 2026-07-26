@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Check, Copy } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth";
 import { groupsService, type GroupDetail } from "@/services/groups";
+import type { Member } from "@/types/group";
 import { ApiError } from "@/lib/api";
 
 const formatInviteCode = (raw: string) => {
@@ -27,6 +28,8 @@ export function GroupDetailPage() {
   const navigate = useNavigate();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
+  const [members, setMembers] = useState<Member[] | null>(null);
+  const [membersError, setMembersError] = useState<string | null>(null);
   const [error, setError] = useState<{ kind: "load" | "notfound" | "forbidden"; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -46,9 +49,14 @@ export function GroupDetailPage() {
   const load = async (groupId: string) => {
     setError(null);
     setGroup(null);
+    setMembers(null);
+    setMembersError(null);
     try {
       const data = await groupsService.get(groupId);
       setGroup(data);
+      // Los miembros se cargan en paralelo. Si fallan, no bloqueamos
+      // la página: la sección se muestra vacía o con un aviso suave.
+      void loadMembers(groupId);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 404) {
@@ -66,6 +74,19 @@ export function GroupDetailPage() {
           kind: "load",
           message: "No hemos podido abrir la cuenta.",
         });
+      }
+    }
+  };
+
+  const loadMembers = async (groupId: string) => {
+    try {
+      const list = await groupsService.listMembers(groupId);
+      setMembers(list);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setMembersError(err.message);
+      } else {
+        setMembersError("No hemos podido listar los miembros.");
       }
     }
   };
@@ -113,6 +134,9 @@ export function GroupDetailPage() {
           <Notebook
             group={group}
             currentUserId={session.user.id}
+            currentUserName={session.user.name}
+            members={members}
+            membersError={membersError}
             copied={copied}
             onCopy={onCopy}
           />
@@ -174,11 +198,17 @@ function Header({
 function Notebook({
   group,
   currentUserId,
+  currentUserName,
+  members,
+  membersError,
   copied,
   onCopy,
 }: {
   group: GroupDetail;
   currentUserId: string;
+  currentUserName: string;
+  members: Member[] | null;
+  membersError: string | null;
   copied: boolean;
   onCopy: () => void;
 }) {
@@ -248,10 +278,156 @@ function Notebook({
         </div>
       </article>
 
-      {/* Secciones reales: por ahora solo cabecera. Las otras tres,
-          honestamente, todavía no tienen endpoint. */}
+      <Signers
+        group={group}
+        currentUserId={currentUserId}
+        currentUserName={currentUserName}
+        members={members}
+        membersError={membersError}
+      />
+
       <Sections />
     </main>
+  );
+}
+
+function Signers({
+  group,
+  currentUserId,
+  currentUserName,
+  members,
+  membersError,
+}: {
+  group: GroupDetail;
+  currentUserId: string;
+  currentUserName: string;
+  members: Member[] | null;
+  membersError: string | null;
+}) {
+  return (
+    <section aria-label="Firmantes de la cuenta" className="space-y-3">
+      <div className="flex items-baseline justify-between px-1">
+        <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
+          Firmantes
+        </p>
+        <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/40">
+          {members
+            ? `${members.length} ${members.length === 1 ? "persona" : "personas"}`
+            : "—"}
+        </p>
+      </div>
+
+      <article className="receipt relative">
+        <div className="bg-card border-x border-ink/12">
+          {membersError ? (
+            <div className="px-7 py-6 sm:px-9">
+              <p className="text-sm text-ink/65">
+                {membersError}{" "}
+                <span className="text-ink/40">— puedes seguir mirando la cuenta.</span>
+              </p>
+            </div>
+          ) : members === null ? (
+            <SignersSkeleton count={2} />
+          ) : members.length === 0 ? (
+            <div className="px-7 py-6 sm:px-9">
+              <p className="text-sm text-ink/55">Nadie ha firmado todavía.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-ink/10">
+              {members.map((m) => (
+                <SignerRow
+                  key={m.userId}
+                  member={m}
+                  isCurrent={m.userId === currentUserId}
+                  isOwner={m.userId === group.createdBy}
+                />
+              ))}
+            </ul>
+          )}
+
+          <div className="flex items-center justify-between border-t border-dashed border-ink/20 px-7 py-3 sm:px-9 text-xs text-ink/55">
+            <span>Cada firma entra en el cuaderno.</span>
+            <span className="font-mono tracking-wider">#firmas</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function SignerRow({
+  member,
+  isCurrent,
+  isOwner,
+}: {
+  member: Member;
+  isCurrent: boolean;
+  isOwner: boolean;
+}) {
+  return (
+    <li className="px-7 py-4 sm:px-9 flex items-center gap-4">
+      <span
+        aria-hidden
+        className="font-mono text-ink/30 text-lg leading-none -mt-0.5 select-none"
+      >
+        ·
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-base font-semibold tracking-[-0.01em] text-ink truncate">
+          {member.name}
+        </p>
+        <p className="mt-1 font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
+          desde el {formatCreatedAt(member.joinedAt)}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {isCurrent && !isOwner && <YouChip />}
+        {isOwner && <OwnerStamp isYou={isCurrent} />}
+      </div>
+    </li>
+  );
+}
+
+function YouChip() {
+  return (
+    <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/65 border-b border-ink/30 pb-0.5">
+      Tú
+    </span>
+  );
+}
+
+function OwnerStamp({ isYou }: { isYou: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="stamp relative select-none"
+    >
+      <span className="inline-block border-[1.5px] border-accent rounded-[3px] px-2.5 py-1 rotate-[-6deg]">
+        <span className="block font-mono text-[10px] tracking-[0.26em] uppercase text-accent leading-none">
+          {isYou ? "Tú · abriste" : "Abierto por"}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function SignersSkeleton({ count }: { count: number }) {
+  return (
+    <ul className="divide-y divide-ink/10">
+      {Array.from({ length: count }).map((_, i) => (
+        <li
+          key={i}
+          className="px-7 py-4 sm:px-9 flex items-center gap-4"
+          aria-hidden
+        >
+          <span className="size-2 rounded-full bg-ink/10" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 w-32 bg-ink/10" />
+            <div className="h-2.5 w-24 bg-ink/5" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -286,9 +462,8 @@ function Sections() {
       </p>
 
       <ul className="border-y border-dashed border-ink/20 divide-y divide-ink/10 bg-card border-x border-ink/12">
-        <DisabledRow serial=",01" label="Miembros" hint="Pendiente — sin endpoint." />
-        <DisabledRow serial=",02" label="Gastos" hint="Pendiente — sin endpoint." />
-        <DisabledRow serial=",03" label="Saldos" hint="Pendiente — sin endpoint." />
+        <DisabledRow serial=",01" label="Gastos" hint="Pendiente — sin endpoint." />
+        <DisabledRow serial=",02" label="Saldos" hint="Pendiente — sin endpoint." />
       </ul>
 
       <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink/40 px-1 pt-1">

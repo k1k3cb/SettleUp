@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Group } from "@/types/group";
+import type { Group, Member } from "@/types/group";
 
 export type GroupDetail = Group;
 
@@ -13,5 +13,8 @@ export const groupsService = {
 
   join: (inviteCode: string) =>
     api<Group>("POST", "/groups/join", { inviteCode }),
+
+  listMembers: (id: string) =>
+    api<Member[]>("GET", `/groups/${id}/members`),
 };
 

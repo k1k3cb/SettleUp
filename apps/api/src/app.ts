@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import { authRouter } from "./auth.routes.js";
 import { groupsRouter } from "./modules/groups/groups.routes.js";
 import { expensesRouter } from "./modules/expenses/expenses.routes.js";
+import { membersRouter } from "./modules/members/members.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 export function createApp() {
@@ -32,6 +33,7 @@ export function createApp() {
   // Anidado bajo /groups para tener :groupId en todas las rutas de expenses.
   // mergeParams en el router de expenses lo hace accesible.
   app.use("/groups/:groupId/expenses", expensesRouter);
+  app.use("/groups/:groupId/members", membersRouter);
 
   // Error handler global al final
   app.use(errorHandler);
