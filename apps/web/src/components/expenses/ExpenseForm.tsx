@@ -67,6 +67,62 @@ const formatCents = (cents: number, currency: string): string => {
   return `${sign}${major},${minor} ${symbol}`;
 };
 
+/**
+ * Devuelve, para cada miembro, los céntimos que el backend asignará.
+ * Implementa la misma regla que el backend: en `equal` y `percentage`,
+ * el primero de la lista seleccionada se lleva el remanente para que
+ * la suma cierre exactamente con el total.
+ */
+const computeFinalSplit = (
+  method: SplitMethod,
+  members: GroupMember[],
+  perMember: Draft["perMember"],
+  amountCents: number,
+): Map<string, number> => {
+  const result = new Map<string, number>();
+  const selected = members.filter((m) => perMember[m.userId]?.selected);
+  if (selected.length === 0 || !Number.isFinite(amountCents)) return result;
+
+  if (method === "equal") {
+    const n = selected.length;
+    const base = Math.floor(amountCents / n);
+    const remainder = amountCents - base * n;
+    for (let i = 0; i < selected.length; i++) {
+      result.set(
+        selected[i]!.userId,
+        base + (i === 0 ? remainder : 0),
+      );
+    }
+    return result;
+  }
+
+  if (method === "exact") {
+    for (const m of selected) {
+      const v = parseAmountToCents(perMember[m.userId]?.exactCents ?? "");
+      result.set(m.userId, Number.isFinite(v) ? v : 0);
+    }
+    return result;
+  }
+
+  // percentage
+  const entries = selected.map((m) => {
+    const raw = (perMember[m.userId]?.percentage ?? "").replace(",", ".");
+    const n = Number(raw);
+    return { userId: m.userId, pct: Number.isFinite(n) ? n : 0 };
+  });
+  let assigned = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i]!;
+    const isLast = i === entries.length - 1;
+    const cents = isLast
+      ? amountCents - assigned
+      : Math.floor((e.pct / 100) * amountCents);
+    result.set(e.userId, cents);
+    assigned += cents;
+  }
+  return result;
+};
+
 // ---------- Esquema local (Zod) ----------
 // Espejo del createExpenseSchema del backend. Validamos en cliente
 // para fallar antes de la red; el backend vuelve a validar.
@@ -155,6 +211,18 @@ export function ExpenseForm({
     [draft.amountInput],
   );
 
+  // Preview del reparto final (lo que el backend asignará)
+  const finalSplit = useMemo(
+    () =>
+      computeFinalSplit(
+        draft.method,
+        members,
+        draft.perMember,
+        amountCents,
+      ),
+    [draft.method, draft.perMember, members, amountCents],
+  );
+
   // Cálculos en vivo del desglose según método
   const breakdown = useMemo(() => {
     const selectedIds = members
@@ -164,7 +232,7 @@ export function ExpenseForm({
     if (draft.method === "equal") {
       const n = selectedIds.length;
       if (n === 0 || !Number.isFinite(amountCents)) {
-        return { ok: false, sum: 0, message: "—" };
+        return { ok: false, sum: 0, message: "—", remainder: 0 };
       }
       const base = Math.floor(amountCents / n);
       const remainder = amountCents - base * n;
@@ -172,38 +240,61 @@ export function ExpenseForm({
         ok: true,
         sum: amountCents,
         message: `${n} personas a partes iguales`,
+        remainder: 0,
       };
     }
 
     if (draft.method === "exact") {
       let sum = 0;
+      let anyMissing = false;
       for (const id of selectedIds) {
         const v = parseAmountToCents(draft.perMember[id]?.exactCents ?? "");
-        if (!Number.isFinite(v)) return { ok: false, sum: 0, message: "Faltan importes" };
-        sum += v;
+        if (!Number.isFinite(v)) {
+          anyMissing = true;
+        } else {
+          sum += v;
+        }
       }
       const matches = Number.isFinite(amountCents) && sum === amountCents;
-      return {
-        ok: matches,
-        sum,
-        message: matches ? "Cuadra" : `Faltan ${formatCents(amountCents - sum, draft.currency)}`,
-      };
+      const diff = Number.isFinite(amountCents) ? amountCents - sum : 0;
+      let message: string;
+      if (matches) {
+        message = "Cuadra";
+      } else if (anyMissing && sum === 0) {
+        message = "Faltan importes";
+      } else if (diff > 0) {
+        message = `Faltan ${formatCents(diff, draft.currency)} por asignar`;
+      } else {
+        message = `Te pasas por ${formatCents(-diff, draft.currency)}`;
+      }
+      return { ok: matches, sum, message, remainder: matches ? 0 : diff };
     }
 
     // percentage
     let sum = 0;
+    let anyMissing = false;
     for (const id of selectedIds) {
       const raw = (draft.perMember[id]?.percentage ?? "").replace(",", ".");
       const n = Number(raw);
-      if (!Number.isFinite(n) || n < 0) return { ok: false, sum: 0, message: "Faltan %" };
-      sum += n;
+      if (!Number.isFinite(n) || n < 0) {
+        anyMissing = true;
+      } else {
+        sum += n;
+      }
     }
     const ok = Math.abs(sum - 100) < 0.0001;
-    return {
-      ok,
-      sum,
-      message: ok ? "Suma 100 %" : `Suma ${sum.toFixed(2)} %`,
-    };
+    const diff = 100 - sum;
+    let message: string;
+    if (ok) {
+      message = "Suma 100 %";
+    } else if (anyMissing && sum === 0) {
+      message = "Faltan %";
+    } else if (diff > 0) {
+      message = `Faltan ${diff.toFixed(2)} %`;
+    } else {
+      message = `Te pasas por ${(-diff).toFixed(2)} %`;
+    }
+    return { ok, sum, message, remainder: ok ? 0 : diff };
   }, [draft, members, amountCents]);
 
   const update = <K extends keyof Draft>(key: K) =>
@@ -235,6 +326,110 @@ export function ExpenseForm({
         [userId]: { ...d.perMember[userId]!, percentage: value },
       },
     }));
+
+  // ---------- Auto-corrección ----------
+
+  /**
+   * En `exact`: reparte el remanente entre todos los seleccionados
+   * de forma proporcional a lo que ya tienen. Si nadie tiene, lo
+   * reparte a partes iguales y el remanente va al primero.
+   */
+  const distributeRemainderExact = () => {
+    if (!Number.isFinite(amountCents)) return;
+    const selected = members.filter(
+      (m) => draft.perMember[m.userId]?.selected,
+    );
+    if (selected.length === 0) return;
+
+    const current = selected.map((m) => ({
+      userId: m.userId,
+      cents: parseAmountToCents(
+        draft.perMember[m.userId]?.exactCents ?? "",
+      ),
+    }));
+    const known = current.filter((c) => Number.isFinite(c.cents) && c.cents > 0);
+    const knownSum = known.reduce((s, c) => s + c.cents, 0);
+    const diff = amountCents - knownSum;
+
+    if (Math.abs(diff) < 1) return;
+
+    let assigned = 0;
+    const next: Record<string, string> = {};
+    for (let i = 0; i < current.length; i++) {
+      const { userId, cents } = current[i]!;
+      if (cents > 0 && knownSum > 0 && known.length > 0) {
+        const share = Math.floor((cents / knownSum) * diff);
+        const newCents = cents + share;
+        assigned += share;
+        next[userId] = (newCents / 100).toFixed(2).replace(".", ",");
+      }
+    }
+    // El primer seleccionado con importe conocido (o el primero de la lista)
+    // se lleva el remanente para que la suma cierre exactamente.
+    const sink =
+      known[0]?.userId ?? current[0]?.userId ?? selected[0]!.userId;
+    const sinkCents = parseAmountToCents(next[sink] ?? "0") + (diff - assigned);
+    next[sink] = (sinkCents / 100).toFixed(2).replace(".", ",");
+
+    setDraft((d) => {
+      const perMember = { ...d.perMember };
+      for (const [userId, value] of Object.entries(next)) {
+        if (perMember[userId]) {
+          perMember[userId] = { ...perMember[userId]!, exactCents: value };
+        }
+      }
+      return { ...d, perMember };
+    });
+  };
+
+  /**
+   * En `percentage`: pone 100% en el primero seleccionado y 0% en el resto.
+   * Útil para "todo para mí".
+   */
+  const giveAllToFirst = () => {
+    const selected = members.filter(
+      (m) => draft.perMember[m.userId]?.selected,
+    );
+    if (selected.length === 0) return;
+    setDraft((d) => {
+      const perMember = { ...d.perMember };
+      for (let i = 0; i < selected.length; i++) {
+        const id = selected[i]!.userId;
+        perMember[id] = {
+          ...perMember[id]!,
+          percentage: i === 0 ? "100" : "0",
+        };
+      }
+      return { ...d, perMember };
+    });
+  };
+
+  /**
+   * Reparte 100% a partes iguales entre los seleccionados.
+   * El primero se lleva el remanente en小数 para que la suma cierre 100.
+   */
+  const distributeEqualPercentage = () => {
+    const selected = members.filter(
+      (m) => draft.perMember[m.userId]?.selected,
+    );
+    const n = selected.length;
+    if (n === 0) return;
+    // Dos decimales es lo que el backend acepta (multipleOf 0.01).
+    const base = Math.floor((100 / n) * 100) / 100;
+    const remainder = +(100 - base * n).toFixed(2);
+    setDraft((d) => {
+      const perMember = { ...d.perMember };
+      for (let i = 0; i < selected.length; i++) {
+        const id = selected[i]!.userId;
+        const pct = i === 0 ? +(base + remainder).toFixed(2) : base;
+        perMember[id] = {
+          ...perMember[id]!,
+          percentage: pct.toFixed(2).replace(/\.?0+$/, "").replace(".", ","),
+        };
+      }
+      return { ...d, perMember };
+    });
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -452,7 +647,7 @@ export function ExpenseForm({
 
           {/* Banda 3: desglose por miembro */}
           <div className="space-y-3">
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline justify-between gap-3">
               <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55">
                 Entre
               </p>
@@ -460,6 +655,7 @@ export function ExpenseForm({
                 className={`font-mono text-[10px] tracking-[0.18em] uppercase ${
                   breakdown.ok ? "text-ink/70" : "text-accent"
                 }`}
+                aria-live="polite"
               >
                 {breakdown.ok ? (
                   <span className="inline-flex items-center gap-1">
@@ -475,6 +671,7 @@ export function ExpenseForm({
             <ul className="border-y border-dashed border-ink/20 divide-y divide-ink/10">
               {members.map((m) => {
                 const cell = draft.perMember[m.userId]!;
+                const assigned = finalSplit.get(m.userId);
                 return (
                   <li
                     key={m.userId}
@@ -497,31 +694,40 @@ export function ExpenseForm({
                         value={cell.exactCents}
                         onChange={(e) => setMemberExact(m.userId, e.target.value)}
                         placeholder="0,00"
+                        aria-label={`Importe para ${m.name}`}
                         className="w-24 bg-transparent border-b border-ink/25 focus:border-ink py-1 text-right text-sm font-mono tabular-nums outline-none transition-colors placeholder:text-ink/30"
                       />
                     )}
 
                     {cell.selected && draft.method === "percentage" && (
-                      <div className="w-24 flex items-center justify-end gap-1">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={cell.percentage}
-                          onChange={(e) => setMemberPercentage(m.userId, e.target.value)}
-                          placeholder="0"
-                          className="w-16 bg-transparent border-b border-ink/25 focus:border-ink py-1 text-right text-sm font-mono tabular-nums outline-none transition-colors placeholder:text-ink/30"
-                        />
-                        <span className="font-mono text-xs text-ink/45">%</span>
+                      <div className="flex items-center justify-end gap-3">
+                        <div className="w-16 flex items-center justify-end gap-1">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={cell.percentage}
+                            onChange={(e) => setMemberPercentage(m.userId, e.target.value)}
+                            placeholder="0"
+                            aria-label={`Porcentaje para ${m.name}`}
+                            className="w-12 bg-transparent border-b border-ink/25 focus:border-ink py-1 text-right text-sm font-mono tabular-nums outline-none transition-colors placeholder:text-ink/30"
+                          />
+                          <span className="font-mono text-xs text-ink/45">%</span>
+                        </div>
+                        <span
+                          className="w-20 text-right font-mono text-xs text-ink/55 tabular-nums"
+                          title="Importe calculado a este porcentaje"
+                        >
+                          {Number.isFinite(assigned ?? NaN)
+                            ? formatCents(assigned as number, draft.currency)
+                            : "—"}
+                        </span>
                       </div>
                     )}
 
                     {draft.method === "equal" && (
-                      <span className="w-24 text-right font-mono text-xs text-ink/45 tabular-nums">
-                        {cell.selected && amountCents > 0
-                          ? formatCents(
-                              Math.floor(amountCents / Math.max(1, countSelected(draft, members))),
-                              draft.currency,
-                            )
+                      <span className="w-20 text-right font-mono text-sm text-ink/85 tabular-nums">
+                        {cell.selected && Number.isFinite(assigned ?? NaN)
+                          ? formatCents(assigned as number, draft.currency)
                           : "—"}
                       </span>
                     )}
@@ -529,6 +735,55 @@ export function ExpenseForm({
                 );
               })}
             </ul>
+
+            {/* Banda Σ: suma en directo + acciones de auto-corrección */}
+            <div className="flex items-baseline justify-between gap-3 pt-1">
+              <div className="flex items-baseline gap-3">
+                <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55">
+                  Σ
+                </p>
+                <p
+                  className={`font-mono text-sm tabular-nums ${
+                    breakdown.ok ? "text-ink" : "text-accent"
+                  }`}
+                >
+                  {draft.method === "percentage"
+                    ? `${breakdown.sum.toFixed(2)} %`
+                    : formatCents(breakdown.sum, draft.currency)}
+                </p>
+                {draft.method !== "percentage" &&
+                  Number.isFinite(amountCents) && (
+                    <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
+                      de {formatCents(amountCents, draft.currency)}
+                    </p>
+                  )}
+                {draft.method === "percentage" && (
+                  <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
+                    de 100 %
+                  </p>
+                )}
+              </div>
+
+              {draft.method === "exact" && !breakdown.ok && (
+                <button
+                  type="button"
+                  onClick={distributeRemainderExact}
+                  className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent underline underline-offset-4 decoration-1 hover:decoration-2"
+                >
+                  Repartir el resto
+                </button>
+              )}
+              {draft.method === "percentage" && !breakdown.ok && (
+                <button
+                  type="button"
+                  onClick={distributeEqualPercentage}
+                  className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent underline underline-offset-4 decoration-1 hover:decoration-2"
+                >
+                  A partes iguales
+                </button>
+              )}
+            </div>
+
             {errors.splits && (
               <p className="font-mono text-[11px] text-accent">{errors.splits}</p>
             )}
@@ -538,8 +793,25 @@ export function ExpenseForm({
           <div className="flex items-center gap-5 pt-1">
             <button
               type="submit"
-              disabled={create.isPending || !breakdown.ok}
-              className="group relative disabled:opacity-60 disabled:cursor-wait"
+              disabled={
+                create.isPending ||
+                !breakdown.ok ||
+                !draft.description.trim() ||
+                !Number.isFinite(amountCents) ||
+                amountCents <= 0 ||
+                members.filter((m) => draft.perMember[m.userId]?.selected)
+                  .length === 0
+              }
+              className="group relative disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                !breakdown.ok
+                  ? "El reparto no cuadra con el importe."
+                  : !draft.description.trim()
+                    ? "Escribe una descripción."
+                    : !Number.isFinite(amountCents) || amountCents <= 0
+                      ? "Introduce un importe válido."
+                      : undefined
+              }
             >
               <span
                 aria-hidden
@@ -547,7 +819,11 @@ export function ExpenseForm({
               />
               <span className="relative inline-flex items-center gap-1.5 px-5 py-2.5 text-card font-semibold tracking-wide">
                 <Plus className="size-4" strokeWidth={2.5} aria-hidden />
-                {create.isPending ? "Anotando…" : "Anotar gasto"}
+                {create.isPending
+                  ? "Anotando…"
+                  : !breakdown.ok
+                    ? "Sin cuadrar"
+                    : "Anotar gasto"}
               </span>
             </button>
             <button
