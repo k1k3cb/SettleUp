@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { signInSchema, type SignInInput } from "@settleup/shared";
 import { signIn } from "@/lib/auth";
 
@@ -14,6 +15,7 @@ export function SignInPage() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const update =
     <K extends keyof SignInInput>(field: K) =>
@@ -125,10 +127,26 @@ export function SignInPage() {
                   >
                     Contraseña
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => setPasswordVisible((v) => !v)}
+                    aria-label={
+                      passwordVisible ? "Ocultar contraseña" : "Mostrar contraseña"
+                    }
+                    aria-pressed={passwordVisible}
+                    className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45 hover:text-ink transition-colors"
+                  >
+                    {passwordVisible ? "Ocultar" : "Mostrar"}
+                    {passwordVisible ? (
+                      <EyeOff className="size-3.5" strokeWidth={2} aria-hidden />
+                    ) : (
+                      <Eye className="size-3.5" strokeWidth={2} aria-hidden />
+                    )}
+                  </button>
                 </div>
                 <input
                   id="signin-password"
-                  type="password"
+                  type={passwordVisible ? "text" : "password"}
                   autoComplete="current-password"
                   value={values.password}
                   onChange={update("password")}

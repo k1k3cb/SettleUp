@@ -8,6 +8,7 @@ import { useGroupExpenses } from "@/hooks/useGroupExpenses";
 import type { GroupMember } from "@/services/members";
 import { ApiError } from "@/lib/api";
 import { ExpenseForm } from "@/components/expenses/ExpenseForm";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const formatCents = (cents: number, currency: string): string => {
   const sign = cents < 0 ? "−" : "";
@@ -572,14 +573,26 @@ function Expenses({
         </div>
       </article>
 
-      {formOpen && members && (
-        <ExpenseForm
-          groupId={groupId}
-          members={members}
-          defaultPayerId={currentUserId || members[0]?.userId || ""}
-          onClose={onCloseForm}
-        />
-      )}
+      <Dialog
+        open={formOpen && !!members}
+        onOpenChange={(open) => {
+          if (!open) onCloseForm();
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="bg-paper border border-ink/15 ring-0 shadow-none p-0 rounded-sm max-w-md gap-0 max-h-[calc(100dvh-2rem)] overflow-hidden"
+        >
+          {members && (
+            <ExpenseForm
+              groupId={groupId}
+              members={members}
+              defaultPayerId={currentUserId || members[0]?.userId || ""}
+              onClose={onCloseForm}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

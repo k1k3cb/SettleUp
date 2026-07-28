@@ -519,7 +519,7 @@ export function ExpenseForm({
     <form
       onSubmit={onSubmit}
       noValidate
-      className="receipt animate-print"
+      className="receipt animate-print max-h-[calc(100dvh-2rem)] overflow-y-auto"
       aria-label="Anotar gasto"
     >
       <div className="bg-card border-x border-ink/12">

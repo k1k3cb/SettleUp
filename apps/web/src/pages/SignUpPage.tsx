@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { signUpSchema, type SignUpInput } from "@settleup/shared";
 import { signUp } from "@/lib/auth";
 
@@ -256,9 +257,16 @@ function PasswordField({
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45 hover:text-ink transition-colors"
+          aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+          aria-pressed={visible}
+          className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45 hover:text-ink transition-colors"
         >
           {visible ? "Ocultar" : "Mostrar"}
+          {visible ? (
+            <EyeOff className="size-3.5" strokeWidth={2} aria-hidden />
+          ) : (
+            <Eye className="size-3.5" strokeWidth={2} aria-hidden />
+          )}
         </button>
       </div>
       <input
