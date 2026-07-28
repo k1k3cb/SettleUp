@@ -59,4 +59,7 @@ export const expensesService = {
 
   create: (groupId: string, body: CreateExpenseInput) =>
     api<ExpenseWithSplits>("POST", `/groups/${groupId}/expenses`, body),
+
+  remove: (groupId: string, expenseId: string) =>
+    api<void>("DELETE", `/groups/${groupId}/expenses/${expenseId}`),
 };

@@ -1,14 +1,41 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Copy, Plus, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  Ban,
+  Check,
+  Copy,
+  MoreHorizontal,
+  Plus,
+  Wallet,
+} from "lucide-react";
 import { useSession, signOut } from "@/lib/auth";
 import { groupsService, type GroupDetail } from "@/services/groups";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { useGroupExpenses } from "@/hooks/useGroupExpenses";
+import { useCancelExpense } from "@/hooks/useCancelExpense";
 import type { GroupMember } from "@/services/members";
+import type { ExpenseWithSplits } from "@/services/expenses";
 import { ApiError } from "@/lib/api";
 import { ExpenseForm } from "@/components/expenses/ExpenseForm";
+import { ExpenseDetailsSheet } from "@/components/expenses/ExpenseDetailsSheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const formatCents = (cents: number, currency: string): string => {
   const sign = cents < 0 ? "−" : "";
@@ -466,6 +493,8 @@ function Expenses({
   const expenses = expensesQuery.data ?? null;
   const count = expenses?.length ?? 0;
   const countLabel = `${count.toString().padStart(2, "0")}`;
+  const [selectedExpense, setSelectedExpense] =
+    useState<ExpenseWithSplits | null>(null);
 
   return (
     <section aria-label="Gastos de la cuenta" className="space-y-3">
@@ -505,12 +534,12 @@ function Expenses({
                 <ExpenseRow
                   key={e.id}
                   index={i}
-                  description={e.description}
-                  amountCents={e.amountCents}
-                  currency={e.currency}
+                  expense={e}
                   paidByName={
                     members?.find((m) => m.userId === e.paidBy)?.name ?? "—"
                   }
+                  canCancel={e.paidBy === currentUserId}
+                  onOpen={() => setSelectedExpense(e)}
                 />
               ))}
             </ul>
@@ -593,41 +622,180 @@ function Expenses({
           )}
         </DialogContent>
       </Dialog>
+
+      <ExpenseDetailsSheet
+        expense={selectedExpense}
+        members={members ?? []}
+        payerName={
+          (selectedExpense &&
+            members?.find((m) => m.userId === selectedExpense.paidBy)?.name) ??
+          "—"
+        }
+        open={!!selectedExpense}
+        onOpenChange={(open) => {
+          if (!open) setSelectedExpense(null);
+        }}
+      />
     </section>
   );
 }
 
 function ExpenseRow({
   index,
-  description,
-  amountCents,
-  currency,
+  expense,
   paidByName,
+  canCancel,
+  onOpen,
 }: {
   index: number;
-  description: string;
-  amountCents: number;
-  currency: string;
+  expense: ExpenseWithSplits;
   paidByName: string;
+  canCancel: boolean;
+  onOpen: () => void;
 }) {
+  const cancel = useCancelExpense(useGroupIdFromContext());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onConfirm = async () => {
+    setError(null);
+    try {
+      await cancel.mutateAsync(expense.id);
+      setConfirmOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("No hemos podido anularlo.");
+      }
+    }
+  };
+
   return (
-    <li className="px-7 py-4 sm:px-9 flex items-center gap-4">
-      <span className="font-mono text-[11px] tracking-[0.12em] text-ink/45 w-8 shrink-0">
-        ,{(index + 1).toString().padStart(2, "0")}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-semibold tracking-[-0.01em] text-ink">
-          {description}
-        </p>
-        <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
-          Pagó {paidByName}
-        </p>
-      </div>
-      <span className="font-mono text-sm tabular-nums text-ink/85">
-        {formatCents(amountCents, currency)}
-      </span>
+    <li className="group/row">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full text-left flex items-center gap-4 px-7 py-4 sm:px-9 hover:bg-ink/[0.03] focus-visible:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40 transition-colors"
+      >
+        <span className="font-mono text-[11px] tracking-[0.12em] text-ink/45 w-8 shrink-0">
+          ,{(index + 1).toString().padStart(2, "0")}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold tracking-[-0.01em] text-ink">
+            {expense.description}
+          </p>
+          <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
+            Pagó {paidByName}
+          </p>
+        </div>
+        <span className="font-mono text-sm tabular-nums text-ink/85">
+          {formatCents(expense.amountCents, expense.currency)}
+        </span>
+        {canCancel ? (
+          <span
+            // El menú vive dentro del botón de la fila. Sin stopPropagation,
+            // abrir el menú también abriría el sheet. Detenemos el evento
+            // antes de que suba al botón padre.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="-mr-1"
+          >
+            <RowMenu
+              onRequestCancel={() => {
+                setError(null);
+                setConfirmOpen(true);
+              }}
+            />
+          </span>
+        ) : (
+          <span
+            aria-hidden
+            className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/30 -mr-1"
+          >
+            —
+          </span>
+        )}
+      </button>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent className="bg-paper border border-ink/15 ring-0 shadow-none rounded-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-mono text-xs tracking-[0.22em] uppercase text-ink/55">
+              Anular gasto
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-ink/85">
+              ¿Anular «{expense.description}»? El apunte deja de contar en los
+              saldos. Si te equivocaste, anota después el gasto correcto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && (
+            <p
+              role="alert"
+              className="font-mono text-xs text-accent border-l-2 border-accent pl-3 py-1"
+            >
+              {error}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={cancel.isPending}
+              className="font-mono text-[10px] tracking-[0.18em] uppercase"
+            >
+              No, volver
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onConfirm}
+              disabled={cancel.isPending}
+              variant="destructive"
+              className="font-mono text-[10px] tracking-[0.18em] uppercase"
+            >
+              {cancel.isPending ? "Anulando…" : "Sí, anular"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </li>
   );
+}
+
+function RowMenu({ onRequestCancel }: { onRequestCancel: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Acciones del apunte"
+        onClick={(e) => e.stopPropagation()}
+        className="text-ink/35 hover:text-ink transition-colors p-1 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40"
+      >
+        <MoreHorizontal className="size-4" strokeWidth={2} aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={4}
+        className="bg-paper border border-ink/15 shadow-md ring-1 ring-foreground/10 rounded-sm min-w-40"
+      >
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestCancel();
+          }}
+          className="font-mono text-[10px] tracking-[0.18em] uppercase"
+        >
+          <Ban className="size-3.5" strokeWidth={2} aria-hidden />
+          Anular gasto
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Hook auxiliar: lee el `groupId` desde la URL. Lo necesita ExpenseRow
+// para construir `useCancelExpense(groupId)`, pero el componente está
+// fuera del árbol de Notebook. Lo hacemos con useParams aquí para no
+// pasar `groupId` por props a cada fila.
+function useGroupIdFromContext(): string {
+  const { id } = useParams<{ id: string }>();
+  return id ?? "";
 }
 
 function BalancesPending() {
