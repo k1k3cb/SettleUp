@@ -22,4 +22,13 @@ export class MembersRepository {
       .orderBy(asc(groupMembers.joinedAt));
     return rows;
   }
+
+  /**
+   * Devuelve un mapa userId → name para resolver nombres en otros
+   * contextos (balances, expenses). Una sola query, sin JOIN doble.
+   */
+  async nameMap(groupId: string): Promise<Record<string, string>> {
+    const members = await this.listByGroup(groupId);
+    return Object.fromEntries(members.map((m) => [m.userId, m.name]));
+  }
 }

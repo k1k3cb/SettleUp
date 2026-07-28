@@ -14,6 +14,7 @@ import { groupsService, type GroupDetail } from "@/services/groups";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { useGroupExpenses } from "@/hooks/useGroupExpenses";
 import { useCancelExpense } from "@/hooks/useCancelExpense";
+import { useGroupBalances } from "@/hooks/useGroupBalances";
 import type { GroupMember } from "@/services/members";
 import type { ExpenseWithSplits } from "@/services/expenses";
 import { ApiError } from "@/lib/api";
@@ -166,6 +167,7 @@ export function GroupDetailPage() {
           <Notebook
             group={group}
             currentUserId={session.user.id}
+            currentUserName={session.user.name}
             copied={copied}
             onCopy={onCopy}
             expenseFormOpen={expenseFormOpen}
@@ -230,6 +232,7 @@ function Header({
 function Notebook({
   group,
   currentUserId,
+  currentUserName,
   copied,
   onCopy,
   expenseFormOpen,
@@ -238,6 +241,7 @@ function Notebook({
 }: {
   group: GroupDetail;
   currentUserId: string;
+  currentUserName: string;
   copied: boolean;
   onCopy: () => void;
   expenseFormOpen: boolean;
@@ -329,7 +333,11 @@ function Notebook({
         onCloseForm={onCloseExpenseForm}
       />
 
-      <BalancesPending />
+      <Balances
+        groupId={group.id}
+        currentUserId={currentUserId}
+        currentUserName={currentUserName}
+      />
     </main>
   );
 }
@@ -807,39 +815,199 @@ function useGroupIdFromContext(): string {
   return id ?? "";
 }
 
-function BalancesPending() {
+function Balances({
+  groupId,
+  currentUserId,
+  currentUserName,
+}: {
+  groupId: string;
+  currentUserId: string;
+  currentUserName: string;
+}) {
+  const balancesQuery = useGroupBalances(groupId);
+  const balances = balancesQuery.data ?? null;
+  const isLoading = balancesQuery.isLoading;
+  const error = balancesQuery.error
+    ? balancesQuery.error instanceof ApiError
+      ? balancesQuery.error.message
+      : "No hemos podido calcular los saldos."
+    : null;
+
+  const myEntry = balances?.balances.find((b) => b.userId === currentUserId);
+  const myBalanceCents = myEntry?.amountCents ?? balances?.myBalanceCents ?? 0;
+
   return (
     <section aria-label="Saldos" className="space-y-3">
       <div className="flex items-baseline justify-between px-1">
         <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
           Saldos
         </p>
+        {balances && (
+          <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/40">
+            {balances.balances.length}{" "}
+            {balances.balances.length === 1 ? "persona" : "personas"}
+          </p>
+        )}
       </div>
+
       <article className="receipt">
         <div className="bg-card border-x border-ink/12">
           <div className="flex items-center justify-between border-b border-ink/10 px-7 py-3 sm:px-9">
             <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-ink/55">
-              Pendiente
+              Resumen
             </span>
-            <Wallet
-              className="size-3.5 text-ink/40"
-              strokeWidth={2}
-              aria-hidden
-            />
+            <Wallet className="size-3.5 text-ink/40" strokeWidth={2} aria-hidden />
           </div>
-          <div className="px-7 py-6 sm:px-9">
-            <p className="text-sm text-ink/55">
-              Los saldos se calculan cuando haya gastos apuntados.
+
+          <div className="px-7 pt-7 pb-2 sm:px-9">
+            <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
+              Tu saldo
+            </p>
+            <p className="mt-3 text-2xl sm:text-3xl font-semibold tracking-[-0.02em] text-ink">
+              <MyBalanceLine
+                cents={myBalanceCents}
+                name={currentUserName}
+                isLoading={isLoading}
+                error={error}
+              />
             </p>
           </div>
+
+          <div className="px-7 pt-6 pb-2 sm:px-9 border-t border-dashed border-ink/15">
+            <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
+              Por liquidar
+            </p>
+            {error ? (
+              <p className="mt-3 text-sm text-ink/55">
+                {error}{" "}
+                <span className="text-ink/40">— el cuaderno sigue abierto.</span>
+              </p>
+            ) : isLoading || !balances ? (
+              <BalancesSkeleton />
+            ) : balances.transfers.length === 0 ? (
+              <p className="mt-3 text-sm text-ink/55">
+                No hay deudas pendientes. La cuenta está saldada.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-ink/10">
+                {balances.transfers.map((t, i) => (
+                  <TransferRow
+                    key={`${t.fromUserId}-${t.toUserId}-${i}`}
+                    transfer={t}
+                    currentUserId={currentUserId}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="flex items-center justify-between border-t border-dashed border-ink/20 px-7 py-3 sm:px-9 text-xs text-ink/55">
-            <span>Llegará con los apuntes.</span>
+            <span>Mínimo de transferencias para cuadrar.</span>
             <span className="font-mono tracking-wider">#saldos</span>
           </div>
         </div>
       </article>
     </section>
   );
+}
+
+function MyBalanceLine({
+  cents,
+  name,
+  isLoading,
+  error,
+}: {
+  cents: number;
+  name: string;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  if (isLoading) {
+    return <span className="text-ink/30">…</span>;
+  }
+  if (error) {
+    return <span className="text-ink/40">No calculable ahora</span>;
+  }
+  if (cents > 0) {
+    return (
+      <>
+        <span className="text-ink/55">Te deben </span>
+        <span className="text-ink">{formatCentsEUR(cents)}</span>
+        <span className="text-ink/40 text-base ml-1">, {name.split(" ")[0]}.</span>
+      </>
+    );
+  }
+  if (cents < 0) {
+    return (
+      <>
+        <span className="text-ink/55">Debes </span>
+        <span className="text-ink">{formatCentsEUR(-cents)}</span>
+        <span className="text-ink/40 text-base ml-1">a alguien.</span>
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="text-ink/55">Estás a paz. </span>
+      <span className="text-ink/40 text-base">Nada que cuadrar.</span>
+    </>
+  );
+}
+
+function TransferRow({
+  transfer,
+  currentUserId,
+}: {
+  transfer: import("@/types/group").Transfer;
+  currentUserId: string;
+}) {
+  const involvesMe =
+    transfer.fromUserId === currentUserId || transfer.toUserId === currentUserId;
+  return (
+    <li className="py-3 flex items-baseline gap-2 text-sm">
+      <span aria-hidden className="text-ink/30 select-none">
+        ·
+      </span>
+      <span className="min-w-0 flex-1 text-ink/80">
+        <span className="font-semibold text-ink">{transfer.fromName}</span>
+        <span className="text-ink/55"> le debe </span>
+        <span className="font-semibold text-ink tabular-nums">
+          {formatCentsEUR(transfer.amountCents)}
+        </span>
+        <span className="text-ink/55"> a </span>
+        <span className="font-semibold text-ink">{transfer.toName}</span>
+      </span>
+      {involvesMe && (
+        <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/55 border-b border-ink/25 pb-0.5 shrink-0">
+          Te toca
+        </span>
+      )}
+    </li>
+  );
+}
+
+function BalancesSkeleton() {
+  return (
+    <ul className="mt-3 divide-y divide-ink/10" aria-hidden>
+      {[0, 1].map((i) => (
+        <li key={i} className="py-3 flex items-center gap-3">
+          <span className="size-2 rounded-full bg-ink/10" />
+          <div className="flex-1 h-3.5 bg-ink/10" />
+          <div className="w-12 h-3.5 bg-ink/10" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function formatCentsEUR(cents: number): string {
+  const euros = cents / 100;
+  return new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(euros);
 }
 
 function InviteStamp({
