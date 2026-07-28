@@ -36,6 +36,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const formatCents = (cents: number, currency: string): string => {
   const sign = cents < 0 ? "−" : "";
@@ -672,51 +677,59 @@ function ExpenseRow({
   };
 
   return (
-    <li className="group/row">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="w-full text-left flex items-center gap-4 px-7 py-4 sm:px-9 hover:bg-ink/[0.03] focus-visible:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40 transition-colors"
-      >
-        <span className="font-mono text-[11px] tracking-[0.12em] text-ink/45 w-8 shrink-0">
-          ,{(index + 1).toString().padStart(2, "0")}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold tracking-[-0.01em] text-ink">
-            {expense.description}
-          </p>
-          <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
-            Pagó {paidByName}
-          </p>
-        </div>
-        <span className="font-mono text-sm tabular-nums text-ink/85">
-          {formatCents(expense.amountCents, expense.currency)}
-        </span>
-        {canCancel ? (
-          <span
-            // El menú vive dentro del botón de la fila. Sin stopPropagation,
-            // abrir el menú también abriría el sheet. Detenemos el evento
-            // antes de que suba al botón padre.
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="-mr-1"
-          >
-            <RowMenu
-              onRequestCancel={() => {
-                setError(null);
-                setConfirmOpen(true);
-              }}
+    <li className="group/row relative">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={onOpen}
+              className="w-full text-left flex items-center gap-4 px-7 py-4 sm:px-9 hover:bg-ink/[0.03] focus-visible:bg-ink/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40 transition-colors"
             />
+          }
+        >
+          <span className="font-mono text-[11px] tracking-[0.12em] text-ink/45 w-8 shrink-0">
+            ,{(index + 1).toString().padStart(2, "0")}
           </span>
-        ) : (
-          <span
-            aria-hidden
-            className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/30 -mr-1"
-          >
-            —
+          <span className="min-w-0 flex-1 block">
+            <span className="block truncate text-base font-semibold tracking-[-0.01em] text-ink">
+              {expense.description}
+            </span>
+            <span className="block font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
+              Pagó {paidByName}
+            </span>
           </span>
-        )}
-      </button>
+          <span className="font-mono text-sm tabular-nums text-ink/85">
+            {formatCents(expense.amountCents, expense.currency)}
+          </span>
+          {!canCancel && (
+            <span
+              aria-hidden
+              className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/30"
+            >
+              —
+            </span>
+          )}
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>
+          Ver detalle del apunte
+        </TooltipContent>
+      </Tooltip>
+
+      {/* El menú vive fuera del <button> (HTML válido) y se posiciona
+          sobre la esquina derecha de la fila. Como el contenido del menú
+          viaja al body vía Portal, abrirlo no propaga al botón. */}
+      {canCancel && (
+        <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2">
+          <RowMenu
+            onRequestCancel={() => {
+              setError(null);
+              setConfirmOpen(true);
+            }}
+          />
+        </div>
+      )}
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent className="bg-paper border border-ink/15 ring-0 shadow-none rounded-sm">
           <AlertDialogHeader>
@@ -763,7 +776,6 @@ function RowMenu({ onRequestCancel }: { onRequestCancel: () => void }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Acciones del apunte"
-        onClick={(e) => e.stopPropagation()}
         className="text-ink/35 hover:text-ink transition-colors p-1 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink/40"
       >
         <MoreHorizontal className="size-4" strokeWidth={2} aria-hidden />
@@ -775,10 +787,7 @@ function RowMenu({ onRequestCancel }: { onRequestCancel: () => void }) {
       >
         <DropdownMenuItem
           variant="destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestCancel();
-          }}
+          onClick={onRequestCancel}
           className="font-mono text-[10px] tracking-[0.18em] uppercase"
         >
           <Ban className="size-3.5" strokeWidth={2} aria-hidden />
