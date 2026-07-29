@@ -10,6 +10,7 @@ import { authenticate } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import {
   groupIdOnlyParamSchema,
+  settlementIdParamSchema,
   createSettlementSchema,
 } from "./settlements.schemas.js";
 
@@ -49,5 +50,19 @@ settlementsRouter.post(
     const input = req.body as Parameters<typeof settlementsService.create>[2];
     const settlement = await settlementsService.create(groupId, userId, input);
     return ApiResponse.created(res, settlement);
+  }),
+);
+
+settlementsRouter.delete(
+  "/:settlementId",
+  validate({ params: settlementIdParamSchema }),
+  asyncHandler(async (req, res) => {
+    const userId = requireUserId(req);
+    const { groupId, settlementId } = req.params as {
+      groupId: string;
+      settlementId: string;
+    };
+    await settlementsService.cancel(groupId, settlementId, userId);
+    return ApiResponse.noContent(res);
   }),
 );

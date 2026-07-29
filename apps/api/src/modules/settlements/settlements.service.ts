@@ -67,4 +67,45 @@ export class SettlementsService {
     }
     return this.repo.listByGroup(groupId);
   }
+
+  /**
+   * Cancela (soft delete) un settlement. Reglas:
+   *  - El settlement debe existir y pertenecer al grupo (404 si no).
+   *  - El grupo debe existir (404 si no).
+   *  - El usuario debe ser miembro del grupo (403 si no).
+   *  - Solo el `fromUser` (quien pagó) puede deshacer su propio pago.
+   *    El `toUser` no puede anular un pago que recibió.
+   *  - Si ya está cancelado, 409 Conflict (idempotencia: no reportar
+   *    éxito doble).
+   */
+  async cancel(
+    groupId: string,
+    settlementId: string,
+    userId: string,
+  ): Promise<void> {
+    const group = await this.groupsRepo.findById(groupId);
+    if (!group) throw new NotFoundError("Group not found");
+    const isMember = await this.groupsRepo.isMember(groupId, userId);
+    if (!isMember) {
+      throw new ForbiddenError("You are not a member of this group");
+    }
+
+    const settlement = await this.repo.findById(settlementId);
+    if (!settlement || settlement.groupId !== groupId) {
+      throw new NotFoundError("Settlement not found");
+    }
+    if (settlement.fromUser !== userId) {
+      throw new ForbiddenError(
+        "Only the payer can cancel a settlement",
+      );
+    }
+    if (settlement.status === "cancelled") {
+      throw new ValidationError(
+        "Settlement is already cancelled",
+        { status: ["Este pago ya está anulado"] },
+      );
+    }
+
+    await this.repo.cancel(settlementId);
+  }
 }

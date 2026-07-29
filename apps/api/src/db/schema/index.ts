@@ -34,6 +34,7 @@ export const splitMethodEnum = pgEnum("split_method", [
 export const settlementStatusEnum = pgEnum("settlement_status", [
   "pending",
   "confirmed",
+  "cancelled",
 ]);
 
 // ---------- USERS (Better Auth: tabla "user") ----------

@@ -8,6 +8,13 @@
       "when": 1784933384454,
       "tag": "0000_flat_phalanx",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785283449548,
+      "tag": "0001_lyrical_infant_terrible",
+      "breakpoints": true
     }
   ]
 }

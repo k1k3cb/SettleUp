@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { groupsService } from "@/services/groups";
+import { balancesService } from "@/services/balances";
 import type { GroupBalances } from "@/types/group";
 
 export const balancesKeys = {
@@ -12,7 +12,7 @@ export function useGroupBalances(groupId: string | undefined) {
     queryKey: groupId ? balancesKeys.byGroup(groupId) : balancesKeys.all,
     queryFn: () => {
       if (!groupId) throw new Error("groupId is required");
-      return groupsService.getBalances(groupId);
+      return balancesService.get(groupId);
     },
     enabled: !!groupId,
   });

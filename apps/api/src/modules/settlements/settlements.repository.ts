@@ -31,6 +31,15 @@ export class SettlementsRepository {
     return row;
   }
 
+  async findById(id: string): Promise<Settlement | null> {
+    const [row] = await db
+      .select()
+      .from(settlements)
+      .where(eq(settlements.id, id))
+      .limit(1);
+    return row ?? null;
+  }
+
   /**
    * Lista los settlements confirmados de un grupo, ordenados por fecha desc.
    */
@@ -45,5 +54,19 @@ export class SettlementsRepository {
         ),
       )
       .orderBy(desc(settlements.confirmedAt));
+  }
+
+  /**
+   * Marca un settlement como cancelado. Soft delete: el row permanece
+   * para auditoría pero deja de contar en los balances (la query de
+   * balances filtra por status='confirmed').
+   */
+  async cancel(id: string): Promise<boolean> {
+    const rows = await db
+      .update(settlements)
+      .set({ status: "cancelled" })
+      .where(eq(settlements.id, id))
+      .returning();
+    return rows.length > 0;
   }
 }

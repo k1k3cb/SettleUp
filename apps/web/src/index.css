@@ -142,6 +142,35 @@
     .group:hover .stamp {
       animation: none !important;
     }
+    .transfer-row {
+      transition: none !important;
+    }
+  }
+
+  /* Fila de transferencia: cuando data-leaving=true, sale deslizando
+     hacia la derecha (dirección de la flecha del botón) y se colapsa
+     en altura para no dejar hueco. La opacidad cae en paralelo.
+     El refetch del balance la desmontará cuando el backend confirme
+     que esa transferencia ya no cuenta. */
+  .transfer-row {
+    overflow: hidden;
+    border-bottom: 1px solid color-mix(in oklab, var(--color-ink) 10%, transparent);
+    transition:
+      transform 420ms cubic-bezier(0.32, 0.72, 0, 1),
+      opacity 280ms ease-out,
+      max-height 420ms cubic-bezier(0.32, 0.72, 0, 1),
+      padding-top 420ms cubic-bezier(0.32, 0.72, 0, 1),
+      padding-bottom 420ms cubic-bezier(0.32, 0.72, 0, 1),
+      border-color 280ms ease-out;
+    max-height: 200px;
+  }
+  .transfer-row[data-leaving="true"] {
+    transform: translateX(110%);
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
   }
 
   /* Inputs con el subrayado de tinta, no el rectángulo estándar */

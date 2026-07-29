@@ -31,3 +31,16 @@ export function useCreateSettlement(groupId: string) {
     },
   });
 }
+
+export function useDeleteSettlement(groupId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (settlementId) =>
+      settlementsService.cancel(groupId, settlementId),
+    onSuccess: () => {
+      // Cancelar un settlement también cambia balances y la lista.
+      qc.invalidateQueries({ queryKey: settlementsKeys.byGroup(groupId) });
+      qc.invalidateQueries({ queryKey: ["balances", groupId] });
+    },
+  });
+}

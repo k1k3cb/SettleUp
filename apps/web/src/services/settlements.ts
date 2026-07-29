@@ -7,4 +7,7 @@ export const settlementsService = {
 
   create: (groupId: string, body: CreateSettlementInput) =>
     api<Settlement>("POST", `/groups/${groupId}/settlements`, body),
+
+  cancel: (groupId: string, settlementId: string) =>
+    api<void>("DELETE", `/groups/${groupId}/settlements/${settlementId}`),
 };
