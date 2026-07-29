@@ -15,6 +15,7 @@ import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { useGroupExpenses } from "@/hooks/useGroupExpenses";
 import { useCancelExpense } from "@/hooks/useCancelExpense";
 import { useGroupBalances } from "@/hooks/useGroupBalances";
+import { useCreateSettlement } from "@/hooks/useSettlements";
 import type { GroupMember } from "@/services/members";
 import type { ExpenseWithSplits } from "@/services/expenses";
 import { ApiError } from "@/lib/api";
@@ -836,6 +837,35 @@ function Balances({
   const myEntry = balances?.balances.find((b) => b.userId === currentUserId);
   const myBalanceCents = myEntry?.amountCents ?? balances?.myBalanceCents ?? 0;
 
+  const [pendingSettlement, setPendingSettlement] =
+    useState<import("@/types/group").Transfer | null>(null);
+  const [settlementError, setSettlementError] = useState<string | null>(null);
+
+  const settle = useCreateSettlement(groupId);
+
+  const onSettle = (transfer: import("@/types/group").Transfer) => {
+    setSettlementError(null);
+    setPendingSettlement(transfer);
+  };
+
+  const onConfirmSettle = async () => {
+    if (!pendingSettlement) return;
+    setSettlementError(null);
+    try {
+      await settle.mutateAsync({
+        toUser: pendingSettlement.toUserId,
+        amountCents: pendingSettlement.amountCents,
+      });
+      setPendingSettlement(null);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSettlementError(err.message);
+      } else {
+        setSettlementError("No hemos podido registrar el pago.");
+      }
+    }
+  };
+
   return (
     <section aria-label="Saldos" className="space-y-3">
       <div className="flex items-baseline justify-between px-1">
@@ -895,6 +925,7 @@ function Balances({
                     key={`${t.fromUserId}-${t.toUserId}-${i}`}
                     transfer={t}
                     currentUserId={currentUserId}
+                    onSettle={onSettle}
                   />
                 ))}
               </ul>
@@ -907,6 +938,62 @@ function Balances({
           </div>
         </div>
       </article>
+
+      <AlertDialog
+        open={pendingSettlement !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingSettlement(null);
+            setSettlementError(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="bg-paper border border-ink/15 ring-0 shadow-none rounded-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-mono text-xs tracking-[0.22em] uppercase text-ink/55">
+              Confirmar pago
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-ink/85">
+              {pendingSettlement && (
+                <>
+                  ¿Confirmas el pago de{" "}
+                  <span className="font-semibold text-ink">
+                    {formatCentsEUR(pendingSettlement.amountCents)}
+                  </span>{" "}
+                  a{" "}
+                  <span className="font-semibold text-ink">
+                    {pendingSettlement.toName}
+                  </span>
+                  ? Se anota como saldado y los saldos se recalculan.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {settlementError && (
+            <p
+              role="alert"
+              className="font-mono text-xs text-accent border-l-2 border-accent pl-3 py-1"
+            >
+              {settlementError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={settle.isPending}
+              className="font-mono text-[10px] tracking-[0.18em] uppercase"
+            >
+              Volver
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onConfirmSettle}
+              disabled={settle.isPending}
+              className="font-mono text-[10px] tracking-[0.18em] uppercase"
+            >
+              {settle.isPending ? "Anotando…" : "Sí, ya está pagado"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
@@ -957,14 +1044,16 @@ function MyBalanceLine({
 function TransferRow({
   transfer,
   currentUserId,
+  onSettle,
 }: {
   transfer: import("@/types/group").Transfer;
   currentUserId: string;
+  onSettle: (transfer: import("@/types/group").Transfer) => void;
 }) {
-  const involvesMe =
-    transfer.fromUserId === currentUserId || transfer.toUserId === currentUserId;
+  const isMine = transfer.fromUserId === currentUserId;
+  const isOwedToMe = transfer.toUserId === currentUserId;
   return (
-    <li className="py-3 flex items-baseline gap-2 text-sm">
+    <li className="py-3 flex items-center gap-2 text-sm">
       <span aria-hidden className="text-ink/30 select-none">
         ·
       </span>
@@ -977,9 +1066,18 @@ function TransferRow({
         <span className="text-ink/55"> a </span>
         <span className="font-semibold text-ink">{transfer.toName}</span>
       </span>
-      {involvesMe && (
-        <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/55 border-b border-ink/25 pb-0.5 shrink-0">
-          Te toca
+      {isMine && (
+        <button
+          type="button"
+          onClick={() => onSettle(transfer)}
+          className="font-mono text-[10px] tracking-[0.18em] uppercase text-accent hover:text-ink underline underline-offset-4 decoration-1 hover:decoration-2 transition-colors shrink-0"
+        >
+          Saldar
+        </button>
+      )}
+      {!isMine && isOwedToMe && (
+        <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45 shrink-0">
+          Te deben
         </span>
       )}
     </li>

@@ -6,6 +6,7 @@ import { groupsRouter } from "./modules/groups/groups.routes.js";
 import { expensesRouter } from "./modules/expenses/expenses.routes.js";
 import { membersRouter } from "./modules/members/members.routes.js";
 import { balancesRouter } from "./modules/balances/balances.routes.js";
+import { settlementsRouter } from "./modules/settlements/settlements.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 export function createApp() {
@@ -36,6 +37,7 @@ export function createApp() {
   app.use("/groups/:groupId/expenses", expensesRouter);
   app.use("/groups/:groupId/members", membersRouter);
   app.use("/groups/:groupId/balances", balancesRouter);
+  app.use("/groups/:groupId/settlements", settlementsRouter);
 
   // Error handler global al final
   app.use(errorHandler);

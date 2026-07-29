@@ -268,10 +268,12 @@ export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
 /**
  * Cálculo de saldos (single query agregada):
  *
- *   balance[user] = SUM(expenses.amountCents WHERE paidBy = user)
- *                  - SUM(expenseSplits.owedAmountCents WHERE userId = user)
- *                  + SUM(settlements.amountCents WHERE toUser = user, confirmed)
- *                  - SUM(settlements.amountCents WHERE fromUser = user, confirmed)
+ * Convención: balance positivo = le deben al usuario; negativo = el usuario debe.
+ *
+ *   balance[user] = +SUM(expenses WHERE paidBy = user)
+ *                  -SUM(expenseSplits WHERE userId = user)
+ *                  +SUM(settlements WHERE fromUser = user, confirmed)
+ *                  -SUM(settlements WHERE toUser = user, confirmed)
  *
  * Lógica de simplificación en apps/api/src/modules/balances/debtSimplifier.ts.
  */

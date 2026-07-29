@@ -18,12 +18,16 @@ import { expenses, expenseSplits, settlements } from "../../db/schema/index.js";
 export class BalancesRepository {
   async getNetBalances(groupId: string): Promise<Record<string, number>> {
     // Cada query devuelve su término con el SIGNO correcto.
-    //   +: lo que pagó (es acreedor hasta que cobren)
-    //   -: lo que debe por splits
-    //   +: settlements que recibió (le devolvieron)
-    //   -: settlements que envió (devolvió dinero)
-    // Se suman al final. Por invariante del sistema, el total debe ser 0.
-    const [paidResult, owedResult, receivedResult, paidSettlementResult] =
+    // Convención: balance positivo = le deben al usuario (acreedor);
+    //             balance negativo = el usuario debe (deudor).
+    //
+    //   +SUM(expenses WHERE paidBy=user)         pagué por el grupo
+    //   -SUM(expenseSplits WHERE userId=user)     me toca pagar
+    //   +SUM(settlements WHERE fromUser=user)     pagué mi deuda
+    //   -SUM(settlements WHERE toUser=user)       recibí pago de mi acreedor
+    //
+    // Por invariante del sistema, el total debe ser 0.
+    const [paidResult, owedResult, fromSettlementResult, toSettlementResult] =
       await Promise.all([
         db
           .select({ userId: expenses.paidBy, total: sum(expenses.amountCents) })
@@ -52,17 +56,6 @@ export class BalancesRepository {
           .groupBy(expenseSplits.userId),
 
         db
-          .select({ userId: settlements.toUser, total: sum(settlements.amountCents) })
-          .from(settlements)
-          .where(
-            and(
-              eq(settlements.groupId, groupId),
-              eq(settlements.status, "confirmed"),
-            ),
-          )
-          .groupBy(settlements.toUser),
-
-        db
           .select({ userId: settlements.fromUser, total: sum(settlements.amountCents) })
           .from(settlements)
           .where(
@@ -72,13 +65,24 @@ export class BalancesRepository {
             ),
           )
           .groupBy(settlements.fromUser),
+
+        db
+          .select({ userId: settlements.toUser, total: sum(settlements.amountCents) })
+          .from(settlements)
+          .where(
+            and(
+              eq(settlements.groupId, groupId),
+              eq(settlements.status, "confirmed"),
+            ),
+          )
+          .groupBy(settlements.toUser),
       ]);
 
     return sumByUser([
-      paidResult,            // +
-      flipSign(owedResult),  // -
-      receivedResult,        // +
-      flipSign(paidSettlementResult), // -
+      paidResult,                  // +
+      flipSign(owedResult),        // -
+      fromSettlementResult,        // +
+      flipSign(toSettlementResult), // -
     ]);
   }
 }

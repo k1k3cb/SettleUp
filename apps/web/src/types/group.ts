@@ -31,3 +31,19 @@ export type GroupBalances = {
   transfers: Transfer[];
   myBalanceCents: number;
 };
+
+export type Settlement = {
+  id: string;
+  groupId: string;
+  fromUser: string;
+  toUser: string;
+  amountCents: number;
+  status: "pending" | "confirmed";
+  createdAt: string;
+  confirmedAt: string | null;
+};
+
+export type CreateSettlementInput = {
+  toUser: string;
+  amountCents: number;
+};
