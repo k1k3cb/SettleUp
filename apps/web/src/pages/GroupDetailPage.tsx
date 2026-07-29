@@ -68,6 +68,21 @@ const formatCreatedAt = (iso: string) => {
   });
 };
 
+/**
+ * Fecha compacta para listas: "26 jul" o "26 jul 2025" si es de otro año.
+ */
+const formatShortDate = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+  });
+};
+
 export function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session, isPending } = useSession();
@@ -706,6 +721,12 @@ function ExpenseRow({
             </span>
             <span className="block font-mono text-[10px] tracking-[0.12em] uppercase text-ink/45">
               Pagó {paidByName}
+              <span className="text-ink/30" aria-hidden>
+                {" · "}
+              </span>
+              <time dateTime={expense.createdAt} title={formatCreatedAt(expense.createdAt)}>
+                {formatShortDate(expense.createdAt)}
+              </time>
             </span>
           </span>
           <span className="font-mono text-sm tabular-nums text-ink/85">
