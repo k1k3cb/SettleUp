@@ -982,8 +982,8 @@ function MyBalanceLine({
   }
   return (
     <>
-      <span className="text-ink/55">Estás a paz. </span>
-      <span className="text-ink/40 text-base">Nada que cuadrar.</span>
+      <span className="text-ink/55">No debes nada. </span>
+      <span className="text-ink/40 text-base">Cuenta saldada.</span>
     </>
   );
 }
