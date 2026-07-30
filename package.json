@@ -21,6 +21,7 @@
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.8.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
