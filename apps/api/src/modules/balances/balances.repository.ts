@@ -7,26 +7,26 @@ import { expenses, expenseSplits, settlements } from "../../db/schema/index.js";
  *
  *   balance[user] = +SUM(expenses WHERE paidBy=user AND groupId=?)
  *                  -SUM(expenseSplits WHERE userId=user AND expenseId IN expenses del grupo)
- *                  +SUM(settlements WHERE toUser=user AND groupId=? AND status=confirmed)
  *                  -SUM(settlements WHERE fromUser=user AND groupId=? AND status=confirmed)
+ *                  +SUM(settlements WHERE toUser=user AND groupId=? AND status=confirmed)
+ *
+ * Convención: balance positivo = le deben al usuario (acreedor);
+ *             balance negativo = el usuario debe (deudor).
+ *
+ * Lógica del signo de los settlements:
+ *   - `fromUser=user` (yo pago a mi deudor): mi acreencia baja, mi balance BAJA. Signo NEGATIVO.
+ *   - `toUser=user` (yo recibo de mi deudor): mi balance SUBE. Signo POSITIVO.
  *
  * Implementación: 4 queries en paralelo, una por término, y se combinan
  * en JS. La query equivalente en SQL puro sería un UNION ALL de 4 SUMs
  * agrupados por user; la versión paralela es más legible y la latencia
  * es equivalente con un pool de WebSocket (no se serializa).
+ *
+ * Por invariante del sistema, la suma de todos los balances de un grupo
+ * debe ser 0.
  */
 export class BalancesRepository {
   async getNetBalances(groupId: string): Promise<Record<string, number>> {
-    // Cada query devuelve su término con el SIGNO correcto.
-    // Convención: balance positivo = le deben al usuario (acreedor);
-    //             balance negativo = el usuario debe (deudor).
-    //
-    //   +SUM(expenses WHERE paidBy=user)         pagué por el grupo
-    //   -SUM(expenseSplits WHERE userId=user)     me toca pagar
-    //   +SUM(settlements WHERE fromUser=user)     pagué mi deuda
-    //   -SUM(settlements WHERE toUser=user)       recibí pago de mi acreedor
-    //
-    // Por invariante del sistema, el total debe ser 0.
     const [paidResult, owedResult, fromSettlementResult, toSettlementResult] =
       await Promise.all([
         db
@@ -79,10 +79,10 @@ export class BalancesRepository {
       ]);
 
     return sumByUser([
-      paidResult,                  // +
-      flipSign(owedResult),        // -
-      fromSettlementResult,        // +
-      flipSign(toSettlementResult), // -
+      paidResult,                    // +  pagué por el grupo
+      flipSign(owedResult),          // -  me toca pagar
+      flipSign(fromSettlementResult), // -  pagué mi deuda
+      toSettlementResult,            // +  recibí pago de mi acreedor
     ]);
   }
 }

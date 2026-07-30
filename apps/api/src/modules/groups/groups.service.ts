@@ -1,5 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { GroupsRepository, type Group } from "./groups.repository.js";
+import {
+  GroupsRepository,
+  type Group,
+  type GroupWithSettlement,
+} from "./groups.repository.js";
 import { NotFoundError, ConflictError, ForbiddenError } from "../../utils/errors.js";
 import type { CreateGroupInput, UpdateGroupInput } from "./groups.schemas.js";
 
@@ -11,7 +15,7 @@ const generateInviteCode = (): string =>
 export class GroupsService {
   constructor(private readonly repo: GroupsRepository) {}
 
-  async listForUser(userId: string): Promise<Group[]> {
+  async listForUser(userId: string): Promise<GroupWithSettlement[]> {
     return this.repo.listForUser(userId);
   }
 

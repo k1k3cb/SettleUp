@@ -369,7 +369,7 @@ function List({
             return (
             <li
               key={g.id}
-              className="group/row animate-print"
+              className={`group/row animate-print ${g.isSettled ? "bg-accent/[0.03]" : ""}`}
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <button
@@ -390,6 +390,19 @@ function List({
                     </span>
                     <span aria-hidden className="text-ink/30"> · </span>
                     Abierta el {formatCreatedAt(g.createdAt)}
+                    {g.isSettled && (
+                      <>
+                        <span aria-hidden className="text-ink/30"> · </span>
+                        <span className="text-accent font-medium inline-flex items-center gap-1">
+                          <Check
+                            className="size-3.5"
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
+                          Saldada
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
                 <span

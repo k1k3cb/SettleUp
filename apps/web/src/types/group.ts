@@ -4,6 +4,12 @@ export type Group = {
   createdBy: string;
   inviteCode: string;
   createdAt: string;
+  /**
+   * Derivado en el backend: el balance neto del usuario actual en este
+   * grupo es 0 (ni debe ni le deben). Es una vista personal, no un
+   * estado global del grupo.
+   */
+  isSettled: boolean;
 };
 
 export type Member = {

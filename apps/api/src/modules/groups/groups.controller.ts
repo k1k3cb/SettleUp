@@ -55,6 +55,6 @@ export const groupsController = {
     const userId = requireUserId(req);
     const { inviteCode } = req.body as JoinGroupInput;
     const group = await groupsService.joinByCode(userId, inviteCode);
-    return ApiResponse.success(res, group);
+    return ApiResponse.created(res, group);
   }),
 };
