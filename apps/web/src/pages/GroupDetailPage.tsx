@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -26,6 +26,12 @@ import {
 import { ExpenseForm } from "@/components/expenses/ExpenseForm";
 import { ExpenseDetailsSheet } from "@/components/expenses/ExpenseDetailsSheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +76,14 @@ export function GroupDetailPage() {
   } | null>(null);
   const [copied, setCopied] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"signers" | "expenses" | "balances">(
+    "signers",
+  );
+  const [counts, setCounts] = useState<{
+    signers: number | null;
+    expenses: number | null;
+    balances: number | null;
+  }>({ signers: null, expenses: null, balances: null });
 
   useEffect(() => {
     if (isPending) return;
@@ -139,7 +153,6 @@ export function GroupDetailPage() {
     <div className="min-h-screen bg-paper text-ink">
       <div className="mx-auto max-w-md px-5 pt-10 pb-16 sm:pt-14 sm:pb-24">
         <Header
-          onBack={() => navigate("/groups")}
           onSignOut={async () => {
             await signOut();
             navigate("/signin", { replace: true });
@@ -163,6 +176,12 @@ export function GroupDetailPage() {
             expenseFormOpen={expenseFormOpen}
             onOpenExpenseForm={() => setExpenseFormOpen(true)}
             onCloseExpenseForm={() => setExpenseFormOpen(false)}
+            activeTab={activeTab}
+            onActiveTabChange={setActiveTab}
+            counts={counts}
+            onCountChange={(key, n) =>
+              setCounts((prev) => ({ ...prev, [key]: n }))
+            }
           />
         ) : (
           <Skeleton />
@@ -173,10 +192,8 @@ export function GroupDetailPage() {
 }
 
 function Header({
-  onBack,
   onSignOut,
 }: {
-  onBack: () => void;
   onSignOut: () => void;
 }) {
   return (
@@ -194,10 +211,6 @@ function Header({
         <span aria-hidden className="text-ink/30">/</span>
         <Link
           to="/groups"
-          onClick={(e) => {
-            e.preventDefault();
-            onBack();
-          }}
           className="group inline-flex items-center gap-1.5 text-ink/55 hover:text-ink transition-colors"
         >
           <ArrowLeft
@@ -228,6 +241,10 @@ function Notebook({
   expenseFormOpen,
   onOpenExpenseForm,
   onCloseExpenseForm,
+  activeTab,
+  onActiveTabChange,
+  counts,
+  onCountChange,
 }: {
   group: GroupDetail;
   currentUserId: string;
@@ -237,6 +254,13 @@ function Notebook({
   expenseFormOpen: boolean;
   onOpenExpenseForm: () => void;
   onCloseExpenseForm: () => void;
+  activeTab: "signers" | "expenses" | "balances";
+  onActiveTabChange: (v: "signers" | "expenses" | "balances") => void;
+  counts: { signers: number | null; expenses: number | null; balances: number | null };
+  onCountChange: (
+    key: "signers" | "expenses" | "balances",
+    n: number | null,
+  ) => void;
 }) {
   const isOwner = group.createdBy === currentUserId;
   const membersQuery = useGroupMembers(group.id);
@@ -309,32 +333,113 @@ function Notebook({
         </div>
       </article>
 
-      <Signers
-        group={group}
-        currentUserId={currentUserId}
-        members={members}
-        membersLoading={membersQuery.isLoading}
-        membersError={membersQuery.error ? (membersQuery.error as Error).message : null}
-      />
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => onActiveTabChange(v as typeof activeTab)}
+        className="flex flex-col gap-4"
+      >
+        {/* Índice de apartados: vive encima del contenido de cada tab.
+            Mismo idioma que el cuaderno: mono, uppercase, sin colores
+            nuevos. El activo se marca con una línea inferior en
+            `--color-ink` (no con fondo, como el chrome por defecto
+            de shadcn). El contador `· 03` se calcula en cada
+            componente y se notifica al padre vía `onCountChange`. */}
+        <TabsList
+          variant="line"
+          className="bg-transparent border-b border-ink/15 rounded-none p-0 h-auto justify-start gap-1 text-ink/55"
+        >
+          <TabTrigger
+            value="signers"
+            label="Firmantes"
+            count={counts.signers}
+          />
+          <TabTrigger
+            value="expenses"
+            label="Apuntes"
+            count={counts.expenses}
+          />
+          <TabTrigger
+            value="balances"
+            label="Saldos"
+            count={counts.balances}
+          />
+        </TabsList>
 
-      <Expenses
-        groupId={group.id}
-        currentUserId={currentUserId}
-        members={members}
-        membersLoading={membersQuery.isLoading}
-        membersError={membersQuery.error ? (membersQuery.error as Error).message : null}
-        formOpen={expenseFormOpen}
-        onOpenForm={onOpenExpenseForm}
-        onCloseForm={onCloseExpenseForm}
-      />
+        <TabsContent
+          value="signers"
+          className="mt-0 focus-visible:outline-none"
+        >
+          <Signers
+            group={group}
+            currentUserId={currentUserId}
+            members={members}
+            membersLoading={membersQuery.isLoading}
+            membersError={membersQuery.error ? (membersQuery.error as Error).message : null}
+            onCountChange={(n) => onCountChange("signers", n)}
+          />
+        </TabsContent>
 
-      <Balances
-        groupId={group.id}
-        currentUserId={currentUserId}
-        currentUserName={currentUserName}
-        members={members ?? []}
-      />
+        <TabsContent
+          value="expenses"
+          className="mt-0 focus-visible:outline-none"
+        >
+          <Expenses
+            groupId={group.id}
+            currentUserId={currentUserId}
+            members={members}
+            membersLoading={membersQuery.isLoading}
+            membersError={membersQuery.error ? (membersQuery.error as Error).message : null}
+            formOpen={expenseFormOpen}
+            onOpenForm={onOpenExpenseForm}
+            onCloseForm={onCloseExpenseForm}
+            onCountChange={(n) => onCountChange("expenses", n)}
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="balances"
+          className="mt-0 focus-visible:outline-none"
+        >
+          <Balances
+            groupId={group.id}
+            currentUserId={currentUserId}
+            currentUserName={currentUserName}
+            members={members ?? []}
+            onCountChange={(n) => onCountChange("balances", n)}
+          />
+        </TabsContent>
+      </Tabs>
     </main>
+  );
+}
+
+/**
+ * Trigger de pestaña con el chrome del cuaderno: mono, uppercase,
+ * sin fondo, sin bordes redondeados, con un contador a la derecha
+ * separado por `·`. El subrayado del activo viene del `variant="line"`
+ * del `TabsList` (regla `after:opacity-100` cuando el trigger está
+ * activo) — aquí solo aportamos color y peso.
+ */
+function TabTrigger({
+  value,
+  label,
+  count,
+}: {
+  value: "signers" | "expenses" | "balances";
+  label: string;
+  count: number | null;
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="rounded-none bg-transparent font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55 hover:text-ink data-active:text-ink data-active:font-medium px-3 py-2.5 h-auto data-active:bg-transparent data-active:shadow-none"
+    >
+      {label}
+      <span aria-hidden className="text-ink/30"> · </span>
+      <span className="tabular-nums">
+        {count === null ? "—" : count.toString().padStart(2, "0")}
+      </span>
+    </TabsTrigger>
   );
 }
 
@@ -344,13 +449,22 @@ function Signers({
   members,
   membersLoading,
   membersError,
+  onCountChange,
 }: {
   group: GroupDetail;
   currentUserId: string;
   members: GroupMember[] | null;
   membersLoading: boolean;
   membersError: string | null;
+  onCountChange?: (n: number | null) => void;
 }) {
+  // El padre (Notebook) necesita saber el número de firmantes para
+  // mostrar el contador en la tab. Le pasamos el número, o `null`
+  // si todavía no tenemos datos. Es un efecto, no un side-effect
+  // durante el render, para no provocar re-renders en cascada.
+  useEffect(() => {
+    onCountChange?.(members ? members.length : null);
+  }, [members, onCountChange]);
   return (
     <section aria-label="Firmantes de la cuenta" className="space-y-3">
       <div className="flex items-baseline justify-between px-1">
@@ -487,6 +601,7 @@ function Expenses({
   formOpen,
   onOpenForm,
   onCloseForm,
+  onCountChange,
 }: {
   groupId: string;
   currentUserId: string;
@@ -496,12 +611,16 @@ function Expenses({
   formOpen: boolean;
   onOpenForm: () => void;
   onCloseForm: () => void;
+  onCountChange?: (n: number | null) => void;
 }) {
   const canOpenForm = !!members && members.length > 0 && !membersError;
   const expensesQuery = useGroupExpenses(groupId);
   const expenses = expensesQuery.data ?? null;
   const count = expenses?.length ?? 0;
   const countLabel = `${count.toString().padStart(2, "0")}`;
+  useEffect(() => {
+    onCountChange?.(expenses ? expenses.length : null);
+  }, [expenses, onCountChange]);
   const [selectedExpense, setSelectedExpense] =
     useState<ExpenseWithSplits | null>(null);
 
@@ -822,11 +941,13 @@ function Balances({
   currentUserId,
   currentUserName,
   members,
+  onCountChange,
 }: {
   groupId: string;
   currentUserId: string;
   currentUserName: string;
   members: GroupMember[];
+  onCountChange?: (n: number | null) => void;
 }) {
   const balancesQuery = useGroupBalances(groupId);
   const balances = balancesQuery.data ?? null;
@@ -839,6 +960,13 @@ function Balances({
 
   const myEntry = balances?.balances.find((b) => b.userId === currentUserId);
   const myBalanceCents = myEntry?.amountCents ?? balances?.myBalanceCents ?? 0;
+  // El contador en la tab es el número de transfers pendientes de
+  // liquidar. Es lo que indica acción: si es 0, el cuaderno está al
+  // día. Los settlements ya liquidados viven en otra sección y no
+  // son acción, son histórico.
+  useEffect(() => {
+    onCountChange?.(balances ? balances.transfers.length : null);
+  }, [balances, onCountChange]);
 
   return (
     <section aria-label="Saldos y liquidaciones" className="space-y-3">
