@@ -5,6 +5,7 @@ import type { GroupMember } from "@/services/members";
 import type { CreateExpenseInput } from "@/services/expenses";
 import { useCreateExpense } from "@/hooks/useCreateExpense";
 import { ApiError } from "@/lib/api";
+import { formatCents } from "@/lib/formatters";
 
 type SplitMethod = "equal" | "exact" | "percentage";
 
@@ -55,16 +56,6 @@ const parseAmountToCents = (raw: string): number => {
   const n = Number(cleaned);
   if (!Number.isFinite(n)) return NaN;
   return Math.round(n * 100);
-};
-
-const formatCents = (cents: number, currency: string): string => {
-  if (!Number.isFinite(cents)) return "—";
-  const sign = cents < 0 ? "−" : "";
-  const abs = Math.abs(cents);
-  const major = Math.floor(abs / 100);
-  const minor = (abs % 100).toString().padStart(2, "0");
-  const symbol = currency === "EUR" ? "€" : currency;
-  return `${sign}${major},${minor} ${symbol}`;
 };
 
 /**

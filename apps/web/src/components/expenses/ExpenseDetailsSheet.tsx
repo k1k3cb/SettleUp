@@ -6,30 +6,9 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { formatCents, formatLongDateTime } from "@/lib/formatters";
 
 type SplitMethod = ExpenseWithSplits["splitMethod"];
-
-const formatCents = (cents: number, currency: string): string => {
-  if (!Number.isFinite(cents)) return "—";
-  const sign = cents < 0 ? "−" : "";
-  const abs = Math.abs(cents);
-  const major = Math.floor(abs / 100);
-  const minor = (abs % 100).toString().padStart(2, "0");
-  const symbol = currency === "EUR" ? "€" : currency;
-  return `${sign}${major},${minor} ${symbol}`;
-};
-
-const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
 
 const methodLabel: Record<SplitMethod, string> = {
   equal: "Partes iguales",
@@ -138,7 +117,7 @@ function Detail({
               {expense.description}
             </h2>
             <p className="mt-2 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45">
-              {formatDate(expense.createdAt)}
+              {formatLongDateTime(expense.createdAt)}
             </p>
           </header>
 

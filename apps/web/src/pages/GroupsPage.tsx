@@ -5,6 +5,7 @@ import { useSession, signOut } from "@/lib/auth";
 import { groupsService } from "@/services/groups";
 import type { Group } from "@/types/group";
 import { ApiError } from "@/lib/api";
+import { formatShortDateWithYear, pad2 } from "@/lib/formatters";
 
 type Mode = "idle" | "create" | "join";
 
@@ -16,17 +17,8 @@ const formatInviteCode = (raw: string) => {
   return `${clean.slice(0, 4)}·${clean.slice(4, 8)}`;
 };
 
-const formatCreatedAt = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-
-const pad2 = (n: number) => n.toString().padStart(2, "0");
+// Alias con el nombre histórico de esta página.
+const formatCreatedAt = formatShortDateWithYear;
 
 export function GroupsPage() {
   const { data: session, isPending } = useSession();

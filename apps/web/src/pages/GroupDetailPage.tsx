@@ -18,6 +18,11 @@ import { useCreateSettlement, useDeleteSettlement, useGroupSettlements } from "@
 import type { GroupMember } from "@/services/members";
 import type { ExpenseWithSplits } from "@/services/expenses";
 import { ApiError } from "@/lib/api";
+import {
+  formatCents,
+  formatLongDate,
+  formatShortDate,
+} from "@/lib/formatters";
 import { ExpenseForm } from "@/components/expenses/ExpenseForm";
 import { ExpenseDetailsSheet } from "@/components/expenses/ExpenseDetailsSheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -43,45 +48,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const formatCents = (cents: number, currency: string = "EUR"): string => {
-  const sign = cents < 0 ? "−" : "";
-  const abs = Math.abs(cents);
-  const major = Math.floor(abs / 100);
-  const minor = (abs % 100).toString().padStart(2, "0");
-  const symbol = currency === "EUR" ? "€" : currency;
-  return `${sign}${major},${minor} ${symbol}`;
-};
-
 const formatInviteCode = (raw: string) => {
   const clean = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   if (clean.length <= 4) return clean;
   return `${clean.slice(0, 4)}·${clean.slice(4, 8)}`;
 };
 
-const formatCreatedAt = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-};
-
-/**
- * Fecha compacta para listas: "26 jul" o "26 jul 2025" si es de otro año.
- */
-const formatShortDate = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const now = new Date();
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "short",
-    year: sameYear ? undefined : "numeric",
-  });
-};
+// Re-export local con el nombre histórico de la página, para no
+// reescribir todos los call sites. `formatCreatedAt === formatLongDate`.
+const formatCreatedAt = formatLongDate;
 
 export function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
