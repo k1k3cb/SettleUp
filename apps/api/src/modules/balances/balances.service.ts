@@ -26,6 +26,13 @@ export type GroupBalances = {
   balances: BalanceView[]; // una entrada por miembro (con amountCents=0 si está saldado)
   transfers: TransferView[]; // transferencias simplificadas greedy
   myBalanceCents: number; // balance del currentUser, convenience
+  /**
+   * true si todos los balances son 0 (o equivalentemente, no hay
+   * transfers pendientes). Para el modelo actual basta con mirar
+   * balances; si en el futuro se soportan sobrepagos, este campo
+   * podría divergir de "todos a 0" y la lógica se complica.
+   */
+  isSettled: boolean;
 };
 
 export class BalancesService {
@@ -83,6 +90,7 @@ export class BalancesService {
       balances,
       transfers: transferViews,
       myBalanceCents: rawBalances[currentUserId] ?? 0,
+      isSettled: balances.every((b) => b.amountCents === 0),
     };
   }
 }

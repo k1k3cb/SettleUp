@@ -30,6 +30,7 @@ export type GroupBalances = {
   balances: BalanceEntry[];
   transfers: Transfer[];
   myBalanceCents: number;
+  isSettled: boolean;
 };
 
 export type Settlement = {

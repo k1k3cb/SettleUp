@@ -196,6 +196,7 @@ export function GroupsPage() {
           copiedId={copiedId}
           onCopy={onCopy}
           onOpen={(id) => navigate(`/groups/${id}`)}
+          currentUserId={session.user.id}
         />
 
         <Stubs
@@ -295,6 +296,7 @@ function List({
   copiedId,
   onCopy,
   onOpen,
+  currentUserId,
 }: {
   groups: Group[] | null;
   loadError: string | null;
@@ -302,6 +304,7 @@ function List({
   copiedId: string | null;
   onCopy: (g: Group) => void;
   onOpen: (id: string) => void;
+  currentUserId: string;
 }) {
   if (loadError) {
     return (
@@ -361,7 +364,9 @@ function List({
         </div>
 
         <ul className="divide-y divide-ink/10">
-          {groups.map((g, i) => (
+          {groups.map((g, i) => {
+            const isOwner = g.createdBy === currentUserId;
+            return (
             <li
               key={g.id}
               className="group/row animate-print"
@@ -380,6 +385,10 @@ function List({
                     {g.name}
                   </p>
                   <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink/45">
+                    <span className={isOwner ? "text-accent" : "text-ink/45"}>
+                      {isOwner ? "Tuya" : "Te uniste"}
+                    </span>
+                    <span aria-hidden className="text-ink/30"> · </span>
                     Abierta el {formatCreatedAt(g.createdAt)}
                   </p>
                 </div>
@@ -424,7 +433,8 @@ function List({
                 />
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </div>
     </section>

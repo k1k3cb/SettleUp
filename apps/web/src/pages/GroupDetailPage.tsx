@@ -266,6 +266,10 @@ function Notebook({
   const isOwner = group.createdBy === currentUserId;
   const membersQuery = useGroupMembers(group.id);
   const members = membersQuery.data ?? null;
+  // TanStack Query deduplica por queryKey, así que esta llamada reutiliza
+  // el cache que carga <Balances/> debajo. Sin fetch doble.
+  const balancesQuery = useGroupBalances(group.id);
+  const isSettled = balancesQuery.data?.isSettled;
 
   return (
     <main className="mt-10 sm:mt-12 space-y-6">
@@ -282,6 +286,7 @@ function Notebook({
               <p className="mt-3 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45">
                 Abierta el {formatCreatedAt(group.createdAt)}
               </p>
+              {isSettled && <SettledStamp />}
             </div>
             <InviteStamp copied={copied} onClick={onCopy} />
           </div>
@@ -1306,6 +1311,28 @@ function InviteStamp({
         </span>
       </div>
     </button>
+  );
+}
+
+/**
+ * Sello "Liquidado" que aparece en la cabecera del grupo cuando
+ * `balances.isSettled === true`. Es informativo (no accionable),
+ * por eso es un <span>, no un botón. Color ink/70 (no accent) para
+ * diferenciar de los sellos de eventos: "liquidado" es un estado
+ * estable, no una acción.
+ */
+function SettledStamp() {
+  return (
+    <span
+      aria-label="Cuenta liquidada"
+      className="stamp relative inline-block mt-3 select-none"
+    >
+      <span className="inline-block border-[1.5px] border-ink/40 rounded-[3px] px-2.5 py-1 rotate-[3deg]">
+        <span className="block font-mono text-[10px] tracking-[0.26em] uppercase text-ink/70 leading-none">
+          Liquidado
+        </span>
+      </span>
+    </span>
   );
 }
 
