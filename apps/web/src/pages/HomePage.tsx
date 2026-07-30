@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Check, NotebookPen, Users } from "lucide-react";
+import { ArrowUpRight, Users } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth";
 
 const today = new Date().toLocaleDateString("es-ES", {
@@ -193,10 +193,13 @@ function Notebook({
             </p>
           </div>
 
-          {/* Asistente: tres casillas contables */}
+          {/* Una sola acción: abrir las cuentas. Las dos filas deshabilitadas
+              que había aquí (Gastos, Saldos) eran ruido: la home no es un
+              menú, es una portada. Las que sí tienen trabajo viven dentro
+              de cada cuenta. */}
           <div className="px-7 pt-8 pb-2 sm:px-9 space-y-2">
             <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-ink/45">
-              Por dónde
+              Empezar
             </p>
             <ul className="border-y border-dashed border-ink/20 divide-y divide-ink/10">
               <Row
@@ -205,24 +208,6 @@ function Notebook({
                 hint="Tus grupos: cena, piso, viaje…"
                 icon={<Users className="size-4" strokeWidth={2} aria-hidden />}
                 onClick={onOpenGroups}
-              />
-              <Row
-                serial=",02"
-                label="Gastos"
-                hint="Pendiente — llegará con la primera cuenta."
-                icon={
-                  <NotebookPen className="size-4" strokeWidth={2} aria-hidden />
-                }
-                disabled
-              />
-              <Row
-                serial=",03"
-                label="Saldos"
-                hint="Quién te debe y a quién debes."
-                icon={
-                  <Check className="size-4" strokeWidth={2} aria-hidden />
-                }
-                disabled
               />
             </ul>
           </div>
