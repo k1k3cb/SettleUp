@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
@@ -17,5 +17,14 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+  },
+  test: {
+    // Por defecto los tests corren en entorno node (rápidos). Los
+    // tests que renderizan componentes de React usan `jsdom`, y se
+    // seleccionan con el comentario `// @vitest-environment jsdom`
+    // en la primera línea del archivo.
+    environment: "node",
+    globals: false,
+    setupFiles: ["./src/test/setup.ts"],
   },
 });

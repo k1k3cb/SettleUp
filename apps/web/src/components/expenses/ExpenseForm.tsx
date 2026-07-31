@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { z } from "zod";
 import type { GroupMember } from "@/services/members";
@@ -546,33 +546,20 @@ export function ExpenseForm({
 
           {/* Banda 1: descripción, importe, pagador */}
           <div className="space-y-5">
-            <ReceiptRow
-              label="Descripción"
+            <DescriptionRow
+              value={draft.description}
+              onChange={(v) => update("description")(v)}
               error={errors.description}
-            >
-              <input
-                type="text"
-                value={draft.description}
-                onChange={(e) => update("description")(e.target.value)}
-                maxLength={120}
-                placeholder="Cena del viernes"
-                aria-invalid={!!errors.description}
-                className="w-full bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base outline-none transition-colors placeholder:text-ink/30"
-              />
-            </ReceiptRow>
+            />
 
             <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-end">
-              <ReceiptRow label="Importe" error={errors.amountCents}>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={draft.amountInput}
-                  onChange={(e) => update("amountInput")(e.target.value)}
-                  placeholder="0,00"
-                  aria-invalid={!!errors.amountCents}
-                  className="w-full bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base font-mono tracking-tight outline-none transition-colors placeholder:text-ink/30"
-                />
-              </ReceiptRow>
+              <AmountRow
+                value={draft.amountInput}
+                onChange={(v) => update("amountInput")(v)}
+                error={errors.amountCents}
+                previewCents={amountCents}
+                currency={draft.currency}
+              />
               <ReceiptRow label="Moneda">
                 <input
                   type="text"
@@ -582,25 +569,14 @@ export function ExpenseForm({
                   className="w-14 bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base font-mono text-center outline-none transition-colors uppercase"
                 />
               </ReceiptRow>
-              <div className="w-20 text-right font-mono text-sm text-ink/45 pb-2 tabular-nums">
-                {formatCents(amountCents, draft.currency)}
-              </div>
             </div>
 
-            <ReceiptRow label="Pagado por" error={errors.paidBy}>
-              <select
-                value={draft.paidBy}
-                onChange={(e) => update("paidBy")(e.target.value)}
-                aria-invalid={!!errors.paidBy}
-                className="w-full bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base outline-none transition-colors appearance-none"
-              >
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </ReceiptRow>
+            <PaidByRow
+              value={draft.paidBy}
+              onChange={(v) => update("paidBy")(v)}
+              members={members}
+              error={errors.paidBy}
+            />
           </div>
 
           {/* Banda 2: método de reparto */}
@@ -843,19 +819,124 @@ function countSelected(draft: Draft, members: GroupMember[]): number {
 function ReceiptRow({
   label,
   error,
+  htmlFor,
   children,
 }: {
   label: string;
   error?: string;
+  htmlFor?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
-      <label className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55 block">
+      <label
+        htmlFor={htmlFor}
+        className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55 block"
+      >
         {label}
       </label>
       {children}
       {error && <p className="font-mono text-[11px] text-accent">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Sub-componentes por fila del form. Cada uno genera un id único con
+ * `useId()` y lo pasa al label (`htmlFor`) y al control (`id`). Esto
+ * es lo que faltaba en el `ReceiptRow` original: el label era
+ * `<label>` de bloque sin asociación con el control, lo que rompe
+ * la accesibilidad y los tests con Testing Library.
+ */
+
+function DescriptionRow({
+  value,
+  onChange,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+}) {
+  const id = useId();
+  return (
+    <ReceiptRow label="Descripción" error={error} htmlFor={id}>
+      <input
+        id={id}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={120}
+        placeholder="Cena del viernes"
+        aria-invalid={!!error}
+        className="w-full bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base outline-none transition-colors placeholder:text-ink/30"
+      />
+    </ReceiptRow>
+  );
+}
+
+function AmountRow({
+  value,
+  onChange,
+  error,
+  previewCents,
+  currency,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  previewCents: number;
+  currency: string;
+}) {
+  const id = useId();
+  return (
+    <>
+      <ReceiptRow label="Importe" error={error} htmlFor={id}>
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="0,00"
+          aria-invalid={!!error}
+          className="w-full bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base font-mono tracking-tight outline-none transition-colors placeholder:text-ink/30"
+        />
+      </ReceiptRow>
+      <div className="w-20 text-right font-mono text-sm text-ink/45 pb-2 tabular-nums">
+        {formatCents(previewCents, currency)}
+      </div>
+    </>
+  );
+}
+
+function PaidByRow({
+  value,
+  onChange,
+  members,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  members: GroupMember[];
+  error?: string;
+}) {
+  const id = useId();
+  return (
+    <ReceiptRow label="Pagado por" error={error} htmlFor={id}>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={!!error}
+        className="w-full bg-transparent border-b border-ink/25 focus:border-ink py-1.5 text-base outline-none transition-colors appearance-none"
+      >
+        {members.map((m) => (
+          <option key={m.userId} value={m.userId}>
+            {m.name}
+          </option>
+        ))}
+      </select>
+    </ReceiptRow>
   );
 }
