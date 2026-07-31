@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -84,6 +84,17 @@ export function GroupDetailPage() {
     expenses: number | null;
     balances: number | null;
   }>({ signers: null, expenses: null, balances: null });
+
+  // Importante: useCallback con [] para que la referencia sea estable.
+  // Si se creara inline en cada render, los useEffect de los hijos
+  // (que dependen de onCountChange) se dispararían en bucle infinito:
+  // re-render → nueva función → useEffect → setCounts → re-render → ...
+  const handleCountChange = useCallback(
+    (key: "signers" | "expenses" | "balances", n: number | null) => {
+      setCounts((prev) => ({ ...prev, [key]: n }));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (isPending) return;
@@ -179,9 +190,7 @@ export function GroupDetailPage() {
             activeTab={activeTab}
             onActiveTabChange={setActiveTab}
             counts={counts}
-            onCountChange={(key, n) =>
-              setCounts((prev) => ({ ...prev, [key]: n }))
-            }
+            onCountChange={handleCountChange}
           />
         ) : (
           <Skeleton />
@@ -459,12 +468,18 @@ function Signers({
   onCountChange?: (n: number | null) => void;
 }) {
   // El padre (Notebook) necesita saber el número de firmantes para
-  // mostrar el contador en la tab. Le pasamos el número, o `null`
-  // si todavía no tenemos datos. Es un efecto, no un side-effect
-  // durante el render, para no provocar re-renders en cascada.
+  // mostrar el contador en la tab. Usamos un ref para el callback
+  // y un useEffect que SOLO depende de `members`. Si dependiéramos
+  // también de `onCountChange`, y el padre pasa el callback inline
+  // (envolviendolo con su key), cada render del padre crearía una
+  // función nueva → el useEffect se re-ejecutaría → bucle infinito.
+  const onCountChangeRef = useRef<(n: number | null) => void>(onCountChange);
   useEffect(() => {
-    onCountChange?.(members ? members.length : null);
-  }, [members, onCountChange]);
+    onCountChangeRef.current = onCountChange;
+  });
+  useEffect(() => {
+    onCountChangeRef.current?.(members ? members.length : null);
+  }, [members]);
   return (
     <section aria-label="Firmantes de la cuenta" className="space-y-3">
       <div className="flex items-baseline justify-between px-1">
@@ -618,9 +633,17 @@ function Expenses({
   const expenses = expensesQuery.data ?? null;
   const count = expenses?.length ?? 0;
   const countLabel = `${count.toString().padStart(2, "0")}`;
+  // Mismo patrón que en Signers: el callback del padre se mete en un
+  // ref y el useEffect solo depende del valor (`expenses`). Si
+  // dependiera de `onCountChange`, el padre pasando el callback
+  // inline con su key causaría un bucle infinito de re-renders.
+  const onCountChangeRef = useRef<(n: number | null) => void>(onCountChange);
   useEffect(() => {
-    onCountChange?.(expenses ? expenses.length : null);
-  }, [expenses, onCountChange]);
+    onCountChangeRef.current = onCountChange;
+  });
+  useEffect(() => {
+    onCountChangeRef.current?.(expenses ? expenses.length : null);
+  }, [expenses]);
   const [selectedExpense, setSelectedExpense] =
     useState<ExpenseWithSplits | null>(null);
 
@@ -730,40 +753,50 @@ function Expenses({
         </div>
       </article>
 
-      <Dialog
-        open={formOpen && !!members}
-        onOpenChange={(open) => {
-          if (!open) onCloseForm();
-        }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          className="bg-paper border border-ink/15 ring-0 shadow-none p-0 rounded-sm max-w-md gap-0 max-h-[calc(100dvh-2rem)] overflow-hidden"
+      {/* Importante: NO montar el Dialog/Sheet cuando están cerrados.
+          base-ui registra listeners globales de click en `document`
+          (en fase de captura) cuando un Dialog/Sheet modal está
+          montado, para cerrar al hacer click fuera. Si lo dejamos
+          montado siempre, ese listener captura TODOS los clicks
+          de la página — incluyendo los del <Link> "← Cuentas" del
+          header, que dejan de navegar. La solución estándar:
+          montar condicionalmente. */}
+      {formOpen && members && (
+        <Dialog
+          open={formOpen}
+          onOpenChange={(open) => {
+            if (!open) onCloseForm();
+          }}
         >
-          {members && (
+          <DialogContent
+            showCloseButton={false}
+            className="bg-paper border border-ink/15 ring-0 shadow-none p-0 rounded-sm max-w-md gap-0 max-h-[calc(100dvh-2rem)] overflow-hidden"
+          >
             <ExpenseForm
               groupId={groupId}
               members={members}
               defaultPayerId={currentUserId || members[0]?.userId || ""}
               onClose={onCloseForm}
             />
-          )}
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
 
-      <ExpenseDetailsSheet
-        expense={selectedExpense}
-        members={members ?? []}
-        payerName={
-          (selectedExpense &&
-            members?.find((m) => m.userId === selectedExpense.paidBy)?.name) ??
-          "—"
-        }
-        open={!!selectedExpense}
-        onOpenChange={(open) => {
-          if (!open) setSelectedExpense(null);
-        }}
-      />
+      {selectedExpense && (
+        <ExpenseDetailsSheet
+          expense={selectedExpense}
+          members={members ?? []}
+          payerName={
+            (selectedExpense &&
+              members?.find((m) => m.userId === selectedExpense.paidBy)?.name) ??
+            "—"
+          }
+          open={!!selectedExpense}
+          onOpenChange={(open) => {
+            if (!open) setSelectedExpense(null);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -960,13 +993,16 @@ function Balances({
 
   const myEntry = balances?.balances.find((b) => b.userId === currentUserId);
   const myBalanceCents = myEntry?.amountCents ?? balances?.myBalanceCents ?? 0;
-  // El contador en la tab es el número de transfers pendientes de
-  // liquidar. Es lo que indica acción: si es 0, el cuaderno está al
-  // día. Los settlements ya liquidados viven en otra sección y no
-  // son acción, son histórico.
+  // Mismo patrón que en Signers/Expenses: callback en un ref, el
+  // useEffect solo depende del valor (`balances`). Evita el bucle
+  // infinito que producía el padre pasando el callback inline.
+  const onCountChangeRef = useRef<(n: number | null) => void>(onCountChange);
   useEffect(() => {
-    onCountChange?.(balances ? balances.transfers.length : null);
-  }, [balances, onCountChange]);
+    onCountChangeRef.current = onCountChange;
+  });
+  useEffect(() => {
+    onCountChangeRef.current?.(balances ? balances.transfers.length : null);
+  }, [balances]);
 
   return (
     <section aria-label="Saldos y liquidaciones" className="space-y-3">
