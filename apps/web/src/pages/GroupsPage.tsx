@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Check, Copy } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth";
@@ -6,6 +6,7 @@ import { groupsService } from "@/services/groups";
 import type { Group } from "@/types/group";
 import { ApiError } from "@/lib/api";
 import { formatShortDateWithYear, pad2 } from "@/lib/formatters";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Mode = "idle" | "create" | "join";
 
@@ -34,6 +35,9 @@ export function GroupsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "settled">(
+    "pending",
+  );
 
   useEffect(() => {
     if (isPending) return;
@@ -49,6 +53,11 @@ export function GroupsPage() {
     try {
       const data = await groupsService.list();
       setGroups(data);
+      // Si no hay grupos pendientes pero sí saldados, salta directo
+      // a la tab "Saldados" en lugar de mostrar una tab vacía por
+      // defecto. Si todo está saldado, también.
+      const hasPending = data.some((g) => !g.isSettled);
+      if (!hasPending) setActiveTab("settled");
     } catch (err) {
       setLoadError(
         err instanceof Error
@@ -160,13 +169,25 @@ export function GroupsPage() {
     );
   }
 
-  const count = groups?.length ?? 0;
-  const countLabel =
-    count === 0
-      ? "Ninguna cuenta abierta"
-      : count === 1
-        ? "cuenta abierta"
-        : "cuentas abiertas";
+  // Filtros por tab. El backend ya calcula `isSettled` por grupo
+  // (vista global: todos los miembros a 0). Filtramos en cliente:
+  // O(N) sobre un array pequeño, no es N+1.
+  const settled = (groups ?? []).filter((g) => g.isSettled);
+  const pending = (groups ?? []).filter((g) => !g.isSettled);
+  const settledCount = settled.length.toString().padStart(2, "0");
+  const pendingCount = pending.length.toString().padStart(2, "0");
+  // El Hero muestra los pendientes (lo que requiere acción), no el
+  // total. Si no hay pendientes pero hay grupos, "al día" + saldados
+  // como sub-label. Si no hay grupos, "sin cuentas".
+  const totalGroups = groups?.length ?? 0;
+  const heroLabel =
+    totalGroups === 0
+      ? "sin cuentas"
+      : pending.length === 0
+        ? "al día"
+        : pending.length === 1
+          ? "pendiente por cuadrar"
+          : "pendientes por cuadrar";
 
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -179,17 +200,86 @@ export function GroupsPage() {
           }}
         />
 
-        <Hero count={count} label={countLabel} />
-
-        <List
-          groups={groups}
-          loadError={loadError}
-          onRetry={load}
-          copiedId={copiedId}
-          onCopy={onCopy}
-          onOpen={(id) => navigate(`/groups/${id}`)}
-          currentUserId={session.user.id}
+        <Hero
+          count={pending.length}
+          label={heroLabel}
+          settledCount={settledCount}
+          totalGroups={totalGroups}
         />
+
+        {groups === null ? (
+          <List
+            groups={groups}
+            loadError={loadError}
+            onRetry={load}
+            copiedId={copiedId}
+            onCopy={onCopy}
+            onOpen={(id) => navigate(`/groups/${id}`)}
+            currentUserId={session.user.id}
+          />
+        ) : (
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+            className="flex flex-col gap-4"
+          >
+            <TabsList
+              variant="line"
+              className="bg-transparent border-b border-ink/15 rounded-none p-0 h-auto justify-start gap-1 text-ink/55"
+            >
+              <GroupsTab
+                value="pending"
+                label="Pendientes"
+                count={pendingCount}
+                isActive={activeTab === "pending"}
+              />
+              <GroupsTab
+                value="settled"
+                label="Saldados"
+                count={settledCount}
+                isActive={activeTab === "settled"}
+              />
+            </TabsList>
+
+            <TabsContent value="pending" className="mt-0 focus-visible:outline-none">
+              {pending.length === 0 ? (
+                <EmptyState
+                  title="Al día."
+                  hint="No hay cuentas pendientes. Si abres una nueva, aparecerá aquí."
+                />
+              ) : (
+                <List
+                  groups={pending}
+                  loadError={null}
+                  onRetry={load}
+                  copiedId={copiedId}
+                  onCopy={onCopy}
+                  onOpen={(id) => navigate(`/groups/${id}`)}
+                  currentUserId={session.user.id}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="settled" className="mt-0 focus-visible:outline-none">
+              {settled.length === 0 ? (
+                <EmptyState
+                  title="Sin liquidar todavía."
+                  hint="Cuando se cierre la primera cuenta, quedará sellada aquí."
+                />
+              ) : (
+                <List
+                  groups={settled}
+                  loadError={null}
+                  onRetry={load}
+                  copiedId={copiedId}
+                  onCopy={onCopy}
+                  onOpen={(id) => navigate(`/groups/${id}`)}
+                  currentUserId={session.user.id}
+                />
+              )}
+            </TabsContent>
+          </Tabs>
+        )}
 
         <Stubs
           mode={mode}
@@ -226,6 +316,57 @@ export function GroupsPage() {
   );
 }
 
+/**
+ * Trigger de pestaña con el chrome del cuaderno. Mismo idioma que
+ * el `TabTrigger` de GroupDetailPage: mono, uppercase, sin fondo,
+ * con un contador a la derecha separado por `·`. El subrayado del
+ * activo viene del `variant="line"` de `TabsList`. Aquí lo
+ * separamos en su propio componente porque este idioma (sin la
+ * lógica de counts de GroupDetailPage) es más simple y específico
+ * de la lista.
+ */
+function GroupsTab({
+  value,
+  label,
+  count,
+  isActive: _isActive,
+}: {
+  value: "pending" | "settled";
+  label: string;
+  count: string;
+  isActive: boolean;
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="rounded-none bg-transparent font-mono text-[10px] tracking-[0.18em] uppercase text-ink/55 hover:text-ink data-active:text-ink data-active:font-medium px-3 py-2.5 h-auto data-active:bg-transparent data-active:shadow-none"
+    >
+      {label}
+      <span aria-hidden className="text-ink/30"> · </span>
+      <span className="tabular-nums">{count}</span>
+    </TabsTrigger>
+  );
+}
+
+function EmptyState({
+  title,
+  hint,
+}: {
+  title: string;
+  hint: string;
+}) {
+  return (
+    <article className="receipt">
+      <div className="bg-card border-x border-ink/12 px-7 py-6 sm:px-9">
+        <p className="text-sm text-ink/80">{title}</p>
+        <p className="mt-2 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45">
+          {hint}
+        </p>
+      </div>
+    </article>
+  );
+}
+
 function PageHeader({
   userName,
   onSignOut,
@@ -258,7 +399,22 @@ function PageHeader({
   );
 }
 
-function Hero({ count, label }: { count: number; label: string }) {
+function Hero({
+  count,
+  label,
+  settledCount,
+  totalGroups,
+}: {
+  count: number;
+  label: string;
+  settledCount: string;
+  totalGroups: number;
+}) {
+  // El número grande es lo que requiere acción. El sub-label
+  // secundario da el contexto del cuaderno entero sin robarle
+  // protagonismo a la cifra principal. Si no hay cuentas en
+  // absoluto, no mostramos el sub-label: solo "sin cuentas".
+  const showSettledSubLabel = totalGroups > 0;
   return (
     <section className="mt-10 sm:mt-14">
       <div className="flex items-end gap-4 leading-none">
@@ -277,6 +433,11 @@ function Hero({ count, label }: { count: number; label: string }) {
       <p className="mt-3 font-mono text-[11px] tracking-[0.18em] uppercase text-ink/55">
         {label}
       </p>
+      {showSettledSubLabel && (
+        <p className="mt-1 font-mono text-[10px] tracking-[0.18em] uppercase text-ink/35">
+          {settledCount} saldadas · {totalGroups} en total
+        </p>
+      )}
     </section>
   );
 }
