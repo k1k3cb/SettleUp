@@ -23,14 +23,8 @@ export function useGroupSettlements(groupId: string | undefined) {
 export function useCreateSettlement(groupId: string) {
   const qc = useQueryClient();
   return useMutation<Settlement, Error, CreateSettlementInput>({
-    mutationFn: (body) => {
-      // eslint-disable-next-line no-console
-      console.log("[mutationFn] creating settlement, groupId=", groupId, "body=", body);
-      return settlementsService.create(groupId, body);
-    },
+    mutationFn: (body) => settlementsService.create(groupId, body),
     onSuccess: () => {
-      // eslint-disable-next-line no-console
-      console.log("[mutationFn] onSuccess");
       // Crear un settlement cambia balances y la lista de pagos.
       qc.invalidateQueries({ queryKey: settlementsKeys.byGroup(groupId) });
       qc.invalidateQueries({ queryKey: ["balances", groupId] });

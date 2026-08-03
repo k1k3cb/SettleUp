@@ -1,0 +1,7 @@
+{
+  "name": "kerberos",
+  "version": "0.0.0",
+  "main": "./index.cjs",
+  "private": true,
+  "description": "Stub for kerberos. Used by Playwright's optional proxy auth detection, which we don't use. The real package isn't installed because it requires native compilation."
+}
