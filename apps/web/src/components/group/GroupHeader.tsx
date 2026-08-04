@@ -1,7 +1,13 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
-export function GroupHeader({ onSignOut }: { onSignOut: () => void }) {
+export function GroupHeader({
+  userName,
+  onSignOut,
+}: {
+  userName: string;
+  onSignOut: () => void;
+}) {
   return (
     <header className="flex items-baseline justify-between">
       <nav
@@ -27,13 +33,19 @@ export function GroupHeader({ onSignOut }: { onSignOut: () => void }) {
           Cuentas
         </Link>
       </nav>
-      <button
-        type="button"
-        onClick={onSignOut}
-        className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45 hover:text-ink transition-colors"
-      >
-        Salir
-      </button>
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[10px] tracking-wide text-ink/55">
+          {userName}
+        </span>
+        <span aria-hidden className="text-ink/20">·</span>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/35 hover:text-accent transition-colors"
+        >
+          Salir
+        </button>
+      </div>
     </header>
   );
 }

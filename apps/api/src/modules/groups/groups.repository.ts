@@ -149,8 +149,8 @@ export class GroupsRepository {
     };
     add(paid, 1);
     add(owed, -1);
-    add(settledFrom, -1);
-    add(settledTo, 1);
+    add(settledFrom, 1);
+    add(settledTo, -1);
 
     // Conjunto de usuarios que tienen **alguna** participación en
     // el grupo (pagaron, deben, liquidaron). Si un usuario tiene

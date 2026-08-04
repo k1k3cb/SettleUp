@@ -128,6 +128,7 @@ export function GroupDetailPage() {
     <div className="min-h-screen bg-paper text-ink">
       <div className="mx-auto max-w-md px-5 pt-10 pb-16 sm:pt-14 sm:pb-24">
         <GroupHeader
+          userName={session.user.name}
           onSignOut={async () => {
             await signOut();
             navigate("/signin", { replace: true });

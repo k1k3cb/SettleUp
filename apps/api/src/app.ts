@@ -13,9 +13,16 @@ export function createApp() {
   const app = express();
 
   // CORS antes de todo: el cliente Vite está en otro origen.
+  const allowedOrigins = env.clientUrl.split(",").map((s) => s.trim());
   app.use(
     cors({
-      origin: env.clientUrl,
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
     }),
   );

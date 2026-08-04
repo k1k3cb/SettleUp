@@ -143,14 +143,19 @@ function Header({
       <div className="font-mono text-xs tracking-[0.22em] uppercase text-ink/70">
         SettleUp
       </div>
-      <button
-        type="button"
-        onClick={onSignOut}
-        className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/45 hover:text-ink transition-colors"
-      >
-        Salir
-      </button>
-      <span className="sr-only">Sesión de {userName}</span>
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[10px] tracking-wide text-ink/55">
+          {userName}
+        </span>
+        <span aria-hidden className="text-ink/20">·</span>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink/35 hover:text-accent transition-colors"
+        >
+          Salir
+        </button>
+      </div>
     </header>
   );
 }
