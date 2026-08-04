@@ -10,9 +10,25 @@ minimum practical set of transfers needed to settle the group.
 - Data fetching: TanStack Query
 - Backend: Express, TypeScript
 - Database: PostgreSQL with Drizzle ORM
-- Realtime: Socket.io
+- Realtime: Socket.io (local) with 15s polling fallback (production)
 - Auth: email/password
 - Deployment target: Vercel for `apps/web`, Railway for `apps/api`, Neon for Postgres
+
+## Realtime sync
+
+The client keeps the group view in sync without manual refresh:
+
+- **Local** (`VITE_WS_URL` set): the client opens a Socket.IO connection,
+  joins the group's room, and reacts to `expense:created`,
+  `expense:cancelled`, `settlement:created`, `settlement:cancelled`,
+  and `members:changed` events by invalidating the relevant
+  TanStack Query keys.
+- **Production** (Vercel, no `VITE_WS_URL`): the same invalidation
+  runs on a 15s interval. The UX is the same; the server doesn't
+  need persistent connections.
+
+Both paths are behind a single hook, `useGroupRealtime(groupId)`, so
+the UI is transport-agnostic. See `apps/web/src/hooks/useGroupRealtime.ts`.
 
 ## Workspace
 

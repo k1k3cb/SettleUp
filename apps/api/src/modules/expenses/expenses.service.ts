@@ -7,6 +7,7 @@ import {
   ConflictError,
 } from "../../utils/errors.js";
 import type { CreateExpenseInput } from "./expenses.schemas.js";
+import { getRealtime } from "../../realtime.js";
 
 export type ExpenseWithSplits = Expense & { splits: ExpenseSplit[] };
 
@@ -59,6 +60,9 @@ export class ExpensesService {
       splitRows,
     );
 
+    // 7. Avisar a los demás miembros del grupo que hay un gasto nuevo.
+    getRealtime().emitExpenseCreated(groupId);
+
     return { ...expense, splits: createdSplits };
   }
 
@@ -100,6 +104,7 @@ export class ExpensesService {
       throw new ForbiddenError("Only the payer can cancel an expense");
     }
     await this.repo.softDelete(expenseId);
+    getRealtime().emitExpenseCancelled(groupId);
   }
 
   // ---------- Cálculo de splits ----------

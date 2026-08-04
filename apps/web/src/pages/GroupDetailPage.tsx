@@ -10,6 +10,7 @@ import {
   type GroupErrorKind,
 } from "@/components/group/GroupErrorState";
 import { GroupSkeleton } from "@/components/group/GroupSkeleton";
+import { useGroupRealtime } from "@/hooks/useGroupRealtime";
 
 /**
  * Página de detalle de un grupo. Es la capa de orquestación: carga
@@ -58,6 +59,11 @@ export function GroupDetailPage() {
     },
     [],
   );
+
+  // Realtime sync: en local con VITE_WS_URL abre socket a Socket.IO;
+  // en producción (Vercel) cae a polling cada 15s. Misma API,
+  // cero impacto en el render.
+  useGroupRealtime(id);
 
   useEffect(() => {
     if (isPending) return;

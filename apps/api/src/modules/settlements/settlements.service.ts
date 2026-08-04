@@ -3,6 +3,7 @@ import { GroupsRepository } from "../groups/groups.repository.js";
 import { MembersRepository } from "../members/members.repository.js";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors.js";
 import type { CreateSettlementInput } from "./settlements.schemas.js";
+import { getRealtime } from "../../realtime.js";
 
 export class SettlementsService {
   constructor(
@@ -50,12 +51,14 @@ export class SettlementsService {
       });
     }
 
-    return this.repo.createConfirmed({
+    const settlement = await this.repo.createConfirmed({
       groupId,
       fromUser,
       toUser: input.toUser,
       amountCents: input.amountCents,
     });
+    getRealtime().emitSettlementCreated(groupId);
+    return settlement;
   }
 
   async listByGroup(groupId: string, userId: string): Promise<Settlement[]> {
@@ -107,5 +110,6 @@ export class SettlementsService {
     }
 
     await this.repo.cancel(settlementId);
+    getRealtime().emitSettlementCancelled(groupId);
   }
 }
