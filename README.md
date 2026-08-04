@@ -5,9 +5,9 @@
 
 ![Home](apps/web/public/screenshots/04-home-signed-in.png)
 
-SettleUp is a full‑stack expense‑splitting app for groups that share costs — flatmates, trip mates, dinner regulars. It keeps a running balance for every member, suggests the minimum set of transfers needed to settle the group, and lets anyone mark a transfer as paid without leaving the notebook.
+SettleUp es una aplicación full‑stack para dividir gastos en grupos que comparten costes — compañeros de piso, de viaje, de cenas. Mantiene un saldo actualizado para cada miembro, sugiere el conjunto mínimo de transferencias necesarias para cuadrar el grupo, y permite a cualquiera marcar una transferencia como pagada sin salir de la libreta.
 
-It is built as a real production app, not a demo: email/password auth, server‑side balance aggregation, realtime sync, soft‑delete of expenses, and a UI that is intentionally **not** another gradient‑with‑emoji SaaS card.
+Está construida como una app de producción real, no un demo: autenticación con email y contraseña, agregación de saldos en el servidor, sincronización en tiempo real, borrado lógico de gastos, y una UI que deliberadamente **no** es otra tarjeta SaaS con degradado y emojis.
 
 ---
 
